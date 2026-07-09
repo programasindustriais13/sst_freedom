@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}Ficha do Colaborador - {{ employee.nome_completo }} - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'employee_list' %}" class="text-primary text-decoration-none">Colaboradores</a></li>
+<li class="breadcrumb-item active text-secondary" aria-current="page">Ficha Cadastral</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Ficha do Colaborador</h1>
+    <div class="d-flex gap-2">
+        <a href="{% url 'employee_update' employee.id %}" class="btn btn-premium btn-premium-primary">
+            <i class="bi bi-pencil-fill me-2"></i> Editar Cadastro
+        </a>
+        <a href="{% url 'delivery_create' %}?employee={{ employee.id }}" class="btn btn-premium btn-premium-primary">
+            <i class="bi bi-shield-fill-check me-2"></i> Entregar EPI
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Coluna da Esquerda: Informações Gerais -->
+    <div class="col-12 col-xl-4">
+        <div class="card-premium card-primary mb-4">
+            <div class="text-center pb-4 mb-4 border-bottom border-secondary">
+                <i class="bi bi-person-circle text-primary" style="font-size: 5rem;"></i>
+                <h4 class="mt-2 text-light">{{ employee.nome_completo }}</h4>
+                <span class="badge bg-secondary p-2 rounded-3">{{ employee.matricula }}</span>
+            </div>
+
+            <div class="row g-3 text-secondary">
+                <div class="col-6">
+                    <small class="text-muted d-block">CPF</small>
+                    <span class="text-light fw-medium">{{ employee.cpf }}</span>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Situação</small>
+                    {% if employee.situacao == 'ATIVO' %}
+                    <span class="badge bg-success">Ativo</span>
+                    {% elif employee.situacao == 'AFASTADO' %}
+                    <span class="badge bg-warning">Afastado</span>
+                    {% else %}
+                    <span class="badge bg-danger">Desligado</span>
+                    {% endif %}
+                </div>
+
+                <div class="col-12">
+                    <small class="text-muted d-block">Função / Cargo</small>
+                    <span class="text-light fw-semibold">{{ employee.funcao.nome }}</span>
+                </div>
+
+                <div class="col-6">
+                    <small class="text-muted d-block">Setor</small>
+                    <span class="text-light">{{ employee.setor.nome }}</span>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Centro de Custo</small>
+                    <span class="text-light">{{ employee.centro_custo.codigo }}</span>
+                </div>
+
+                <div class="col-6">
+                    <small class="text-muted d-block">Turno</small>
+                    <span class="text-light">{{ employee.get_turno_display }}</span>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Admissão</small>
+                    <span class="text-light">{{ employee.data_admissao|date:"d/m/Y" }}</span>
+                </div>
+
+                <div class="col-12">
+                    <small class="text-muted d-block">Telefone</small>
+                    <span class="text-light">{{ employee.telefone|default:"-" }}</span>
+                </div>
+                <div class="col-12">
+                    <small class="text-muted d-block">E-mail</small>
+                    <span class="text-light">{{ employee.email|default:"-" }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grade de Tamanhos -->
+        <div class="card-premium mb-4">
+            <h4 class="mb-3 text-light"><i class="bi bi-rulers"></i> Tamanhos Corporativos</h4>
+            <div class="row g-3 text-secondary text-center">
+                <div class="col-4 border-end border-secondary">
+                    <small class="text-muted d-block">Camisa</small>
+                    <span class="text-light fw-bold fs-5">{{ employee.tamanho_camisa|default:"-" }}</span>
+                </div>
+                <div class="col-4 border-end border-secondary">
+                    <small class="text-muted d-block">Calça</small>
+                    <span class="text-light fw-bold fs-5">{{ employee.tamanho_calca|default:"-" }}</span>
+                </div>
+                <div class="col-4">
+                    <small class="text-muted d-block">Calçado</small>
+                    <span class="text-light fw-bold fs-5">{{ employee.num_calcado|default:"-" }}</span>
+                </div>
+                <div class="col-6 mt-3 border-end border-secondary">
+                    <small class="text-muted d-block">Luva</small>
+                    <span class="text-light fw-bold">{{ employee.tamanho_luva|default:"-" }}</span>
+                </div>
+                <div class="col-6 mt-3">
+                    <small class="text-muted d-block">Farda Modelo</small>
+                    <span class="text-light small">{{ employee.modelo_farda|default:"-" }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Coluna da Direita: Históricos e Entregas -->
+    <div class="col-12 col-xl-8">
+        <!-- Ficha de EPIs Ativos / Entregues -->
+        <div class="card-premium mb-4">
+            <h4 class="mb-3 text-success"><i class="bi bi-shield-fill-check"></i> Ficha de EPIs Entregues</h4>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">EPI</th>
+                            <th class="text-muted border-0">C.A. / Lote</th>
+                            <th class="text-muted border-0 text-center">Qtd</th>
+                            <th class="text-muted border-0">Data Entrega</th>
+                            <th class="text-muted border-0">Próxima Troca</th>
+                            <th class="text-muted border-0 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for delivery in deliveries %}
+                        <tr>
+                            <td class="text-light fw-medium">
+                                {{ delivery.product_variant.product.nome }}
+                                <small class="text-muted d-block">Tamanho: {{ delivery.product_variant.tamanho }}</small>
+                            </td>
+                            <td>
+                                {{ delivery.ca_entregue.numero_exibicao|default:"CA N/A" }}
+                                <small class="text-muted d-block">Lote: {{ delivery.lot.identificador }}</small>
+                            </td>
+                            <td class="text-center">{{ delivery.quantidade }}</td>
+                            <td>{{ delivery.data_entrega|date:"d/m/Y" }}</td>
+                            <td>{{ delivery.data_prevista_troca|date:"d/m/Y" }}</td>
+                            <td class="text-center">
+                                {% if delivery.status_assinatura == 'ASSINADO' %}
+                                <span class="badge bg-success" title="Ciência confirmada por {{ delivery.nome_trabalhador_confirmacao }}"><i class="bi bi-check-lg"></i> Assinado</span>
+                                {% else %}
+                                <a href="{% url 'delivery_sign' delivery.id %}" class="badge bg-warning text-dark text-decoration-none"><i class="bi bi-clock"></i> Pendente</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted border-0 py-4">Nenhum EPI ativo registrado nesta ficha.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Matriz de Recomendações de EPI -->
+        <div class="card-premium mb-4">
+            <h4 class="mb-3 text-info"><i class="bi bi-list-task"></i> Matriz de EPIs recomendados para a Função</h4>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">EPI</th>
+                            <th class="text-muted border-0 text-center">Tipo</th>
+                            <th class="text-muted border-0 text-center">Quantidade</th>
+                            <th class="text-muted border-0 text-center">Vida Útil (Dias)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in matrix %}
+                        <tr>
+                            <td class="text-light fw-medium">{{ entry.product.nome }}</td>
+                            <td class="text-center">
+                                {% if entry.principal %}
+                                <span class="badge bg-primary">Principal</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Secundário</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">{{ entry.quantidade_padrao }}</td>
+                            <td class="text-center">{{ entry.vida_util_dias }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted border-0 py-4">Nenhum EPI associado à função na matriz.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Histórico Funcional -->
+        <div class="card-premium">
+            <h4 class="mb-3 text-light"><i class="bi bi-clock-history"></i> Histórico Funcional</h4>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">Cargo / Função</th>
+                            <th class="text-muted border-0">Setor</th>
+                            <th class="text-muted border-0">Período</th>
+                            <th class="text-muted border-0">Alterado por</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for hist in history %}
+                        <tr>
+                            <td class="text-light fw-semibold">{{ hist.funcao.nome }}</td>
+                            <td>{{ hist.setor.nome }}</td>
+                            <td>
+                                {{ hist.data_inicio|date:"d/m/Y H:i" }} 
+                                a 
+                                {% if hist.data_fim %}{{ hist.data_fim|date:"d/m/Y H:i" }}{% else %}<span class="badge bg-success">Atual</span>{% endif %}
+                            </td>
+                            <td>{{ hist.alterado_por.username|default:"Sistema" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted border-0 py-4">Nenhum histórico registrado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

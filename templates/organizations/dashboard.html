@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastros Organizacionais - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item active text-secondary" aria-current="page">Estrutura Organizacional</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Estrutura Organizacional</h1>
+    <div class="d-flex gap-2">
+        {% if request.user.is_admin %}
+        <a href="{% url 'company_create' %}" class="btn btn-premium btn-premium-primary"><i class="bi bi-plus-lg"></i> Empresa</a>
+        <a href="{% url 'unit_create' %}" class="btn btn-premium btn-premium-primary"><i class="bi bi-plus-lg"></i> Unidade</a>
+        {% endif %}
+        <a href="{% url 'sector_create' %}" class="btn btn-premium btn-premium-primary"><i class="bi bi-plus-lg"></i> Setor</a>
+        <a href="{% url 'cost_center_create' %}" class="btn btn-premium btn-premium-primary"><i class="bi bi-plus-lg"></i> CC</a>
+        <a href="{% url 'function_create' %}" class="btn btn-premium btn-premium-primary"><i class="bi bi-plus-lg"></i> Função</a>
+        <a href="{% url 'location_create' %}" class="btn btn-premium btn-premium-primary"><i class="bi bi-plus-lg"></i> Local Estoque</a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Unidades -->
+    <div class="col-12 col-lg-6">
+        <div class="card-premium">
+            <h4 class="mb-3 text-primary"><i class="bi bi-building"></i> Unidades</h4>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">Código</th>
+                            <th class="text-muted border-0">Nome</th>
+                            <th class="text-muted border-0">Cidade/UF</th>
+                            <th class="text-muted border-0 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for unit in units %}
+                        <tr>
+                            <td class="text-light border-secondary">{{ unit.codigo }}</td>
+                            <td class="border-secondary">{{ unit.nome }}</td>
+                            <td class="border-secondary">{{ unit.cidade }}/{{ unit.estado }}</td>
+                            <td class="text-center border-secondary">
+                                {% if unit.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted border-0 py-4">Nenhuma unidade cadastrada ou vinculada.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Setores -->
+    <div class="col-12 col-lg-6">
+        <div class="card-premium">
+            <h4 class="mb-3 text-success"><i class="bi bi-diagram-3"></i> Setores</h4>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">Nome</th>
+                            <th class="text-muted border-0">Código</th>
+                            <th class="text-muted border-0">Unidade</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sector in sectors %}
+                        <tr>
+                            <td class="text-light border-secondary">{{ sector.nome }}</td>
+                            <td class="border-secondary">{{ sector.codigo|default:"-" }}</td>
+                            <td class="border-secondary">{{ sector.unit.codigo }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" class="text-center text-muted border-0 py-4">Nenhum setor cadastrado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Centros de Custo -->
+    <div class="col-12 col-lg-6">
+        <div class="card-premium">
+            <h4 class="mb-3 text-warning"><i class="bi bi-wallet2"></i> Centros de Custo</h4>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">Código</th>
+                            <th class="text-muted border-0">Nome</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cc in cost_centers %}
+                        <tr>
+                            <td class="text-light border-secondary">{{ cc.codigo }}</td>
+                            <td class="border-secondary">{{ cc.nome }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="2" class="text-center text-muted border-0 py-4">Nenhum centro de custo cadastrado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Funções / Cargos -->
+    <div class="col-12 col-lg-6">
+        <div class="card-premium">
+            <h4 class="mb-3 text-info"><i class="bi bi-briefcase"></i> Funções e Cargos</h4>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">Função</th>
+                            <th class="text-muted border-0">Descrição</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for func in functions %}
+                        <tr>
+                            <td class="text-light border-secondary fw-semibold">{{ func.nome }}</td>
+                            <td class="border-secondary text-truncate" style="max-width: 250px;">{{ func.descricao|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="2" class="text-center text-muted border-0 py-4">Nenhuma função cadastrada.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Locais de Estoque -->
+    <div class="col-12">
+        <div class="card-premium">
+            <h4 class="mb-3 text-light"><i class="bi bi-box-seam"></i> Locais de Estoque</h4>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">Código</th>
+                            <th class="text-muted border-0">Nome do Local</th>
+                            <th class="text-muted border-0">Unidade</th>
+                            <th class="text-muted border-0">Tipo</th>
+                            <th class="text-muted border-0 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for loc in locations %}
+                        <tr>
+                            <td class="text-light border-secondary">{{ loc.codigo }}</td>
+                            <td class="border-secondary">{{ loc.nome }}</td>
+                            <td class="border-secondary">{{ loc.unit.codigo }}</td>
+                            <td class="border-secondary">{{ loc.get_tipo_display }}</td>
+                            <td class="text-center border-secondary">
+                                {% if loc.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted border-0 py-4">Nenhum local de estoque cadastrado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

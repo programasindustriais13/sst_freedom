@@ -1,0 +1,1216 @@
+PROMPT MESTRE — INÍCIO DO SISTEMA “SST FREEDOM”
+FASE 1A — FUNDAÇÃO, CADASTROS, ESTOQUES E CONTROLE DE EPI
+
+Leia integralmente este prompt antes de alterar qualquer arquivo.
+
+============================================================
+1. CONTEXTO E ORDEM OBRIGATÓRIA DE EXECUÇÃO
+============================================================
+
+Este é um NOVO sistema Django para gestão de Saúde e Segurança do Trabalho, com foco inicial em:
+- controle de Equipamentos de Proteção Individual — EPI;
+- estoque do Almoxarifado;
+- estoque do SST;
+- transferências entre estoques;
+- entregas individuais de EPI;
+- custos, notas fiscais e centros de custo;
+- matriz de EPI por função;
+- alertas de vida útil, validade do produto e validade do C.A.;
+- cadastro de colaboradores;
+- futura integração dos módulos de treinamentos, ASO e exames periódicos.
+
+Antes de qualquer implementação:
+
+1. Leia primeiro:
+   - contexto/constitution.md
+   - contexto/SPEC_TEMPLATE.md
+   - todos os arquivos de contexto relacionados à arquitetura e padrões do projeto, caso existam.
+
+2. Leia sem modificar as planilhas de referência existentes na pasta fontes:
+   - EPIs ESTOQ.xlsx
+   - PLANILHA DE ATUALIZAÇÃO ASO...xlsx
+   - Prompt-padrão.txt
+
+3. Analise a estrutura real da pasta de trabalho antes de criar arquivos.
+
+4. Utilize obrigatoriamente abordagem SPEC-DRIVEN:
+   - o subagente Arquiteto deve criar uma SPEC detalhada para a Fase 1A usando contexto/SPEC_TEMPLATE.md;
+   - o subagente QA deve revisar a SPEC;
+   - somente após a aprovação da SPEC o subagente Backend poderá implementar;
+   - após a implementação, o QA deve executar uma revisão funcional, estrutural, de segurança e de regressão.
+
+5. Crie também, dentro da pasta contexto, um documento de roadmap com as fases futuras, sem implementá-las nesta execução:
+   - Fase 1B: importação assistida dos dados legados;
+   - Fase 2: treinamentos e capacitações;
+   - Fase 3: ASO e exames ocupacionais;
+   - Fase 4: relatórios avançados, indicadores e automações;
+   - Fase 5: recursos móveis avançados, QR Code e eventual operação offline.
+
+IMPORTANTE:
+- Nesta execução, implemente somente a Fase 1A descrita neste prompt.
+- Não crie funcionalidades incompletas ou telas fictícias das fases futuras.
+- Deixe a arquitetura preparada para as fases futuras por meio de limites claros entre os módulos.
+
+============================================================
+2. EXCEÇÃO AO PROMPT PADRÃO POR SE TRATAR DE NOVO PROJETO
+============================================================
+
+O prompt padrão normalmente determina “não criar novo projeto”. Neste caso há uma exceção expressa: este é um novo projeto.
+
+Regras:
+- Se já existir um projeto Django válido na pasta atual, trabalhe nele e não crie outro.
+- Se não existir, crie exatamente um projeto Django na pasta atual.
+- Use “config” como pacote de configuração do Django.
+- Use “SST Freedom” como nome visível do sistema.
+- Não crie projeto aninhado desnecessariamente.
+- Não crie uma segunda pasta raiz contendo outra cópia do projeto.
+- Não crie novo ambiente virtual.
+- Não altere, crie ou exclua arquivos fora da pasta atual de trabalho.
+- Não altere as planilhas da pasta fontes.
+- Não duplique código.
+- Não use código de exemplo, mocks permanentes ou dados falsos em produção.
+- Não execute ações destrutivas.
+- Não apague dados ou migrations existentes, caso já existam.
+- Se houver conflito entre o estado real do projeto e este prompt, pare e documente o bloqueio antes de prosseguir.
+
+============================================================
+3. OBJETIVOS NÃO FUNCIONAIS OBRIGATÓRIOS
+============================================================
+
+O sistema deve ser:
+
+1. Responsivo e mobile-first
+   - perfeito funcionamento em smartphone, tablet e desktop;
+   - menus adaptáveis;
+   - sidebar em offcanvas no celular;
+   - botões e controles com área de toque adequada;
+   - formulários simples, divididos em cards ou etapas curtas;
+   - tabelas devem se transformar em cards ou possuir visualização móvel legível;
+   - evitar rolagem horizontal como fluxo principal;
+   - feedback visual claro de sucesso, erro e carregamento;
+   - acessibilidade básica: labels, foco visível, contraste e mensagens de erro associadas aos campos.
+
+2. Escalável
+   - arquitetura modular;
+   - serviços de domínio para operações críticas;
+   - regras de negócio fora de templates e sem views excessivamente grandes;
+   - consultas otimizadas com select_related/prefetch_related;
+   - paginação em todas as listas potencialmente grandes;
+   - índices de banco para filtros frequentes;
+   - transações atômicas nas movimentações de estoque;
+   - sem SQL específico de um único banco;
+   - configuração por variáveis de ambiente;
+   - compatibilidade com SQLite no desenvolvimento e PostgreSQL em produção;
+   - preparado para múltiplas empresas e unidades, sem implementar tenancy complexo.
+
+3. Fácil de usar
+   - linguagem em português do Brasil;
+   - timezone padrão America/Fortaleza;
+   - moeda em Real brasileiro;
+   - telas orientadas às tarefas reais do Almoxarifado e do SST;
+   - buscas por nome, matrícula, CPF, produto, C.A., fornecedor e nota fiscal;
+   - filtros persistentes quando possível;
+   - confirmação explícita para operações irreversíveis;
+   - nenhuma regra crítica depender apenas de JavaScript.
+
+4. Seguro e auditável
+   - modelo de usuário customizado criado desde o início;
+   - controle de acesso por perfil e unidade;
+   - CSRF, validações no servidor e proteção de uploads;
+   - trilha de auditoria;
+   - movimentações históricas não podem ser apagadas;
+   - registros de catálogo devem ser inativados, não excluídos, quando já utilizados;
+   - não registrar dados sensíveis em logs;
+   - arquivos com nomes internos aleatórios/UUID;
+   - LGPD e minimização de dados;
+   - o Almoxarife não pode acessar informações de saúde ocupacional.
+
+============================================================
+4. TECNOLOGIA E PADRÕES
+============================================================
+
+Utilize:
+- Python compatível com Django 5.2 LTS;
+- Django 5.2 LTS na versão de patch estável disponível no ambiente;
+- templates server-side do Django;
+- Bootstrap 5.3 para layout responsivo;
+- Bootstrap Icons ou ícones equivalentes já adotados pelo projeto;
+- JavaScript mínimo e progressivo;
+- HTMX somente se trouxer ganho claro e estiver documentado;
+- banco configurado por variável de ambiente;
+- arquivos estáticos e mídia configurados sem depender de caminhos absolutos;
+- requirements.txt ou pyproject.toml com dependências fixadas e justificadas;
+- código, nomes técnicos e classes em inglês quando adequado;
+- textos da interface em português do Brasil.
+
+Não criar uma SPA.
+Não introduzir React, Vue ou outro framework de frontend sem necessidade.
+Não adicionar Celery/Redis nesta fase apenas para alertas. Implemente comandos idempotentes que possam ser executados por cron/agendador e documente o ponto de extensão para uma fila futura.
+
+============================================================
+5. MÓDULOS E ORGANIZAÇÃO SUGERIDA
+============================================================
+
+A SPEC deve validar a melhor divisão, mas a arquitetura deve cobrir responsabilidades equivalentes a:
+
+- core:
+  utilitários, mixins, validações, classes base, dashboard e configurações comuns.
+
+- accounts:
+  usuário customizado, autenticação, perfis e escopo de acesso.
+
+- organizations:
+  empresa, unidade, setor, centro de custo, função/cargo e local de estoque.
+
+- employees:
+  colaboradores, vínculo funcional, tamanhos e situação cadastral.
+
+- inventory:
+  fornecedores, notas fiscais, lotes, variantes, locais de estoque, transferências e movimentações.
+
+- ppe:
+  catálogo de EPI, C.A., matriz por função, necessidades extras, entregas, devoluções, substituições e ficha de EPI.
+
+- notifications:
+  regras e registros de alertas internos.
+
+- audit:
+  eventos de auditoria de operações críticas.
+
+Os módulos futuros de treinamento e saúde ocupacional devem constar apenas no roadmap da pasta contexto nesta execução.
+
+============================================================
+6. PERFIS E PERMISSÕES
+============================================================
+
+Perfis de negócio:
+
+A. TÉCNICO DE SEGURANÇA DO TRABALHO
+Pode:
+- cadastrar e editar colaboradores dentro das unidades permitidas;
+- cadastrar funções, setores e centros de custo, conforme permissão;
+- definir a matriz de EPI obrigatório por função;
+- registrar necessidade extraordinária de EPI para um colaborador;
+- consultar os estoques permitidos;
+- receber transferências destinadas ao estoque SST;
+- entregar, substituir, devolver e baixar EPI;
+- consultar ficha e histórico de EPI;
+- consultar alertas de troca, validade de produto e C.A.;
+- consultar relatórios e custos autorizados.
+
+Não pode:
+- alterar silenciosamente movimentações já concluídas;
+- aumentar estoque sem uma movimentação formal;
+- acessar unidades não autorizadas.
+
+B. ALMOXARIFE
+Pode:
+- cadastrar fornecedores;
+- registrar nota fiscal e entrada de mercadorias;
+- cadastrar ou complementar produtos/variantes necessários à entrada;
+- controlar o estoque do Almoxarifado;
+- criar e expedir transferências para o estoque SST;
+- acompanhar recebimento ou divergências da transferência;
+- consultar custos, lotes, notas e níveis de estoque dentro de sua unidade.
+
+Não pode:
+- fazer entrega individual diretamente ao colaborador, salvo permissão futura explícita;
+- definir matriz de EPI por função;
+- acessar dados de ASO, exames ou outras informações médicas;
+- editar movimentações concluídas.
+
+C. ADMINISTRADOR
+- Utilize superuser/staff para administração técnica inicial.
+- Não transforme o Django Admin na interface principal do sistema.
+- Cadastros operacionais devem ter telas próprias responsivas.
+- O administrador pode gerenciar usuários, perfis e unidades permitidas.
+
+Implemente as permissões no backend.
+Ocultar um botão não substitui a verificação de permissão na view, serviço e queryset.
+
+============================================================
+7. CADASTROS ORGANIZACIONAIS
+============================================================
+
+Criar modelos e telas para:
+
+1. Empresa
+- razão social;
+- nome fantasia;
+- CNPJ;
+- ativo.
+
+2. Unidade
+- empresa;
+- código;
+- nome;
+- cidade/UF;
+- ativo.
+
+Considere como dados legados de exemplo as unidades encontradas na planilha:
+- RDC - 01;
+- RDC - 02;
+- RDC - 03;
+- RDC - 04;
+- BQS - 02;
+- BQS - 03;
+- GALPÃO;
+- CAMPINA ATACADO.
+
+Não inserir automaticamente esses dados em produção sem uma seed ou importação explícita.
+
+3. Setor
+- unidade;
+- nome;
+- código opcional;
+- ativo.
+
+4. Centro de custo
+- empresa/unidade;
+- código;
+- nome;
+- ativo.
+
+5. Função/Cargo
+- empresa;
+- nome;
+- descrição;
+- ativo.
+
+6. Local de estoque
+- unidade;
+- código;
+- nome;
+- tipo:
+  ALMOXARIFADO;
+  SST;
+  OUTRO;
+- ativo.
+
+A estrutura deve permitir vários locais por unidade no futuro.
+
+============================================================
+8. CADASTRO DE COLABORADORES
+============================================================
+
+Campos mínimos:
+- empresa;
+- unidade;
+- matrícula única dentro da empresa;
+- nome completo;
+- CPF com validação e armazenamento normalizado;
+- função/cargo;
+- setor;
+- centro de custo;
+- turno;
+- data de admissão;
+- situação:
+  ATIVO;
+  AFASTADO;
+  DESLIGADO;
+- data de desligamento, quando aplicável;
+- telefone;
+- e-mail;
+- tamanho de camisa;
+- tamanho de calça;
+- numeração de calçado/bota;
+- tamanho de luva, quando aplicável;
+- modelo de farda, quando aplicável;
+- observações operacionais;
+- criado por;
+- datas de criação e alteração.
+
+Regras:
+- não excluir colaborador que possua histórico;
+- utilizar inativação/desligamento;
+- registrar histórico de alterações de função, setor, unidade e centro de custo;
+- ao mudar a função, recalcular as necessidades principais de EPI sem alterar o histórico passado;
+- dados pessoais devem aparecer somente para perfis autorizados;
+- o Almoxarife deve visualizar apenas os dados mínimos necessários para identificar o colaborador em operações de estoque, quando aplicável.
+
+============================================================
+9. CATÁLOGO DE EPI, VARIANTES E C.A.
+============================================================
+
+Separar corretamente:
+
+A. Produto/EPI
+- nome;
+- categoria de proteção;
+- descrição;
+- unidade de medida;
+- fabricante ou marca;
+- exige C.A.;
+- controlado individualmente ou consumível/descartável;
+- ativo.
+
+B. Variante
+- produto;
+- tamanho/numeração/modelo/cor;
+- SKU/código interno;
+- código de barras opcional;
+- estoque mínimo por local;
+- estoque máximo opcional;
+- ativo.
+
+Exemplos existentes na planilha que precisam ser suportados:
+- botas numeradas de 35 a 44;
+- luvas P, M, G, GG e XG;
+- camisas e calças P, M, G, GG e XG;
+- itens sem grade de tamanho;
+- protetores auditivos;
+- máscaras;
+- óculos;
+- aventais;
+- capacetes;
+- vestimentas;
+- itens consumíveis.
+
+C. Certificado de Aprovação — C.A.
+Campos:
+- número normalizado, somente dígitos para pesquisa;
+- número de exibição;
+- produto/descrição oficial;
+- fabricante/importador;
+- natureza/tipo de proteção;
+- situação;
+- data de emissão, quando disponível;
+- data de validade;
+- fonte;
+- data e hora da última sincronização;
+- status de verificação:
+  VERIFICADO_BASE_OFICIAL;
+  INFORMADO_MANUALMENTE;
+  NÃO_ENCONTRADO;
+  DESATUALIZADO;
+- observação;
+- conteúdo bruto ou hash da origem somente se necessário para auditoria, sem armazenar dados inúteis.
+
+Regras de integração:
+- não fazer scraping frágil da página de consulta;
+- não tentar burlar CAPTCHA, autenticação ou proteção do portal;
+- criar uma abstração de provedor de C.A.;
+- implementar sincronização por importação da base oficial do CAEPI disponibilizada pelo MTE;
+- criar comando idempotente, por exemplo:
+  python manage.py sync_caepi --file CAMINHO_DO_ARQUIVO
+- suportar dry-run;
+- validar estrutura e encoding do arquivo;
+- gerar relatório de importação;
+- fazer upsert pelo número do C.A.;
+- não apagar registros históricos se um C.A. desaparecer da base;
+- ao digitar o C.A. no cadastro do EPI, consultar a base local por requisição autenticada;
+- preencher dados oficiais encontrados;
+- permitir preenchimento manual quando a base não estiver disponível, exigindo justificativa;
+- destacar visualmente C.A. vencido, próximo do vencimento, não encontrado ou desatualizado;
+- armazenar a data da última verificação;
+- não confundir:
+  1. validade do C.A.;
+  2. validade física do produto/lote;
+  3. vida útil após entrega ao trabalhador.
+
+============================================================
+10. FORNECEDORES, NOTAS FISCAIS, COMPRAS E LOTES
+============================================================
+
+Fornecedor:
+- razão social/nome;
+- CNPJ/CPF;
+- contato;
+- telefone;
+- e-mail;
+- ativo.
+
+Nota fiscal/recebimento:
+- fornecedor;
+- empresa/unidade recebedora;
+- número da nota fiscal;
+- série;
+- chave de acesso opcional;
+- data de emissão;
+- data de recebimento;
+- centro de custo;
+- frete;
+- desconto;
+- valor total;
+- documento anexado opcional;
+- observações;
+- status:
+  RASCUNHO;
+  CONFERIDA;
+  CANCELADA.
+
+Itens:
+- variante do EPI;
+- C.A. associado no momento da compra;
+- lote do fabricante;
+- data de fabricação opcional;
+- data de validade física do produto;
+- quantidade;
+- custo unitário;
+- subtotal;
+- local de estoque de entrada.
+
+Regras:
+- confirmar a nota deve gerar movimentos de entrada;
+- após confirmação, não editar quantidades ou valores silenciosamente;
+- correções devem ocorrer por cancelamento controlado ou movimentação de ajuste autorizada;
+- impedir confirmação duplicada;
+- usar transação atômica;
+- calcular custo total;
+- registrar usuário e data;
+- permitir a análise de custo por nota, fornecedor, produto, unidade e centro de custo;
+- manter o custo real do lote;
+- preparar o domínio para cálculo de custo médio, sem perder o custo original do lote.
+
+============================================================
+11. CONTROLE DE ESTOQUE BASEADO EM MOVIMENTAÇÕES
+============================================================
+
+Não utilizar um campo de estoque editável como fonte principal da verdade.
+
+Criar livro-razão imutável de movimentações:
+- ENTRADA_COMPRA;
+- TRANSFERÊNCIA_SAÍDA;
+- TRANSFERÊNCIA_ENTRADA;
+- ENTREGA_COLABORADOR;
+- DEVOLUÇÃO_COLABORADOR;
+- AJUSTE_POSITIVO;
+- AJUSTE_NEGATIVO;
+- BAIXA_DANO;
+- BAIXA_PERDA;
+- BAIXA_VENCIMENTO;
+- CANCELAMENTO/ESTORNO CONTROLADO.
+
+Cada movimento deve conter:
+- empresa/unidade;
+- local de estoque;
+- variante;
+- lote;
+- quantidade com sinal ou direção definida de forma consistente;
+- custo unitário aplicável;
+- data/hora;
+- origem do movimento;
+- usuário responsável;
+- observação/justificativa;
+- correlação com transferência, nota ou entrega;
+- identificador idempotente quando aplicável.
+
+Regras:
+- o saldo deve ser calculado a partir das movimentações;
+- caso seja criado cache de saldo, ele deve ser derivado e possuir rotina de reconciliação;
+- nunca permitir estoque negativo;
+- usar transaction.atomic;
+- usar bloqueio apropriado para evitar duas saídas concorrentes sobre o mesmo saldo;
+- testar concorrência lógica e consistência;
+- toda correção deve deixar trilha de auditoria;
+- movimentos concluídos não podem ser apagados;
+- relatórios devem permitir reconstruir a origem de cada saldo.
+
+============================================================
+12. TRANSFERÊNCIA ALMOXARIFADO → SST
+============================================================
+
+Fluxo mínimo:
+1. Almoxarife cria transferência em rascunho.
+2. Seleciona origem Almoxarifado e destino SST.
+3. Adiciona variantes, lotes e quantidades.
+4. Sistema valida o saldo.
+5. Almoxarife confirma a expedição.
+6. Sistema gera saída da origem e deixa transferência em trânsito.
+7. Técnico de Segurança confirma o recebimento.
+8. Sistema gera entrada no destino.
+9. Divergências devem ser registradas com justificativa e tratadas sem apagar o histórico.
+
+Status:
+- RASCUNHO;
+- EXPEDIDA;
+- RECEBIDA;
+- RECEBIDA_COM_DIVERGÊNCIA;
+- CANCELADA.
+
+Regras:
+- somente o Almoxarife pode expedir;
+- somente usuário autorizado no destino pode receber;
+- não permitir receber duas vezes;
+- cancelamento após expedição exige fluxo de estorno, não exclusão;
+- mostrar comprovante e histórico;
+- suportar impressão/exportação futura;
+- exibir saldo projetado e saldo disponível antes de confirmar.
+
+============================================================
+13. MATRIZ DE EPI POR FUNÇÃO
+============================================================
+
+Criar vínculo entre função/cargo e EPI/variante ou grupo de variantes.
+
+Campos:
+- função;
+- produto/EPI;
+- variante específica opcional;
+- obrigatório;
+- EPI principal da função;
+- quantidade padrão;
+- vida útil padrão em dias;
+- prazo de troca preventiva;
+- orientação/justificativa;
+- ativo;
+- vigência inicial e final opcional;
+- criado por;
+- datas de auditoria.
+
+Regras:
+- ao vincular colaborador à função, o sistema deve mostrar a lista principal aplicável;
+- não gerar estoque ou entrega automaticamente;
+- a matriz representa necessidade/recomendação, não comprovação de entrega;
+- alterações na matriz não podem apagar as necessidades e entregas históricas;
+- vida útil deve poder ser personalizada por função;
+- permitir exceção por colaborador com justificativa;
+- distinguir EPI principal da função de EPI extraordinário.
+
+============================================================
+14. EPI EXTRAORDINÁRIO PARA UM COLABORADOR
+============================================================
+
+Criar um registro específico para necessidade extraordinária.
+
+Campos:
+- colaborador;
+- EPI/variante;
+- motivo;
+- atividade temporária ou risco específico;
+- data inicial;
+- data final opcional;
+- quantidade;
+- vida útil/prazo de troca específico;
+- responsável pela autorização;
+- observação;
+- ativo.
+
+Regra essencial:
+- este EPI não deve aparecer como “EPI principal da função”;
+- deve aparecer em uma área separada como “EPI extraordinário”;
+- a entrega deve permanecer na ficha e nos custos do colaborador;
+- não alterar automaticamente a matriz da função;
+- deve existir filtro e relatório específico para uso extraordinário.
+
+============================================================
+15. ENTREGA INDIVIDUAL DE EPI
+============================================================
+
+Fluxo móvel e simples para o Técnico de Segurança:
+
+1. localizar colaborador por nome, matrícula ou CPF;
+2. mostrar:
+   - função;
+   - setor;
+   - tamanhos;
+   - EPIs principais pendentes;
+   - EPIs próximos da troca;
+   - EPIs extraordinários autorizados;
+   - alertas relevantes;
+3. selecionar EPI/variante e lote disponível no estoque SST;
+4. sugerir tamanho conforme cadastro do colaborador;
+5. informar quantidade;
+6. indicar natureza da entrega:
+   - INICIAL;
+   - SUBSTITUIÇÃO_POR_VIDA_ÚTIL;
+   - DANO;
+   - EXTRAVIO;
+   - MUDANÇA_DE_FUNÇÃO;
+   - NECESSIDADE_EXTRAORDINÁRIA;
+   - OUTRA;
+7. informar data de entrega;
+8. calcular próxima troca com base na regra aplicável;
+9. exigir justificativa quando houver entrega antecipada, quantidade excepcional ou item fora da matriz;
+10. registrar confirmação do responsável pela entrega;
+11. gerar movimento de saída no estoque SST;
+12. gerar recibo/ficha da entrega.
+
+Registrar:
+- colaborador;
+- função e setor no momento da entrega;
+- centro de custo no momento da entrega;
+- EPI e variante;
+- C.A. efetivamente entregue;
+- lote;
+- validade física;
+- quantidade;
+- custo unitário do lote;
+- data/hora;
+- vida útil utilizada no cálculo;
+- data prevista de troca;
+- origem da necessidade: FUNÇÃO ou EXTRAORDINÁRIA;
+- motivo;
+- observações;
+- usuário responsável;
+- evidência de ciência do trabalhador.
+
+Evidência:
+- nesta fase, implementar assinatura simples em tela ou confirmação eletrônica com nome do trabalhador e registro de data/hora;
+- guardar hash do documento/recibo gerado;
+- registrar usuário, data/hora e informações técnicas mínimas da operação;
+- não chamar isso de biometria;
+- não implementar impressão digital ou reconhecimento facial nesta fase;
+- permitir gerar ficha/recibo em PDF e relatório extraível;
+- a ausência temporária de assinatura não pode permitir apagar a entrega: deve gerar pendência auditável.
+
+============================================================
+16. DEVOLUÇÃO, SUBSTITUIÇÃO E BAIXA
+============================================================
+
+Devolução:
+- recebida em condição REUTILIZÁVEL, DANIFICADA ou DESCARTADA;
+- reutilizável pode retornar ao estoque somente mediante regra e confirmação;
+- danificada/descartada gera baixa;
+- registrar motivo e condição.
+
+Substituição:
+- deve relacionar entrega anterior e nova entrega;
+- nunca sobrescrever a entrega anterior;
+- permitir troca antecipada com justificativa;
+- registrar perda, dano, desgaste e vencimento.
+
+Baixa:
+- exige motivo;
+- exige permissão;
+- não pode deixar estoque negativo;
+- gera movimento imutável.
+
+============================================================
+17. EPI DESCARTÁVEL OU DE USO COLETIVO NO PONTO DE CONSUMO
+============================================================
+
+Criar fluxo separado para itens cuja entrega individual seja inviável, como determinados descartáveis.
+
+Permitir:
+- abastecer ponto de consumo;
+- identificar local;
+- produto;
+- lote;
+- C.A.;
+- validade;
+- quantidade disponibilizada;
+- responsável;
+- data;
+- reposição;
+- saldo estimado ou consumo informado.
+
+Não misturar esse fluxo com a ficha individual.
+Manter rastreabilidade de lote, validade, C.A. e local de disponibilização.
+
+============================================================
+18. ALERTAS
+============================================================
+
+Criar alertas internos configuráveis, sem depender de Celery.
+
+Categorias:
+- estoque abaixo do mínimo;
+- lote próximo da validade;
+- lote vencido;
+- C.A. próximo do vencimento;
+- C.A. vencido;
+- C.A. não verificado ou desatualizado;
+- EPI de colaborador próximo da troca;
+- EPI de colaborador com troca vencida;
+- transferência pendente de recebimento;
+- entrega sem ciência/assinatura;
+- divergência de estoque.
+
+Faixas padrão configuráveis:
+- 90 dias;
+- 60 dias;
+- 30 dias;
+- 7 dias;
+- vencido.
+
+Implementar:
+- comando idempotente process_alerts;
+- deduplicação dos alertas;
+- resolução automática quando a condição deixar de existir;
+- painel por usuário e unidade;
+- status NOVO, LIDO e RESOLVIDO;
+- links para a ação correspondente;
+- arquitetura pronta para e-mail no futuro, mas sem exigir serviço externo nesta fase.
+
+============================================================
+19. DASHBOARD
+============================================================
+
+Criar dashboard responsivo conforme perfil.
+
+Cards mínimos:
+- saldo total no Almoxarifado;
+- saldo total no SST;
+- itens abaixo do estoque mínimo;
+- lotes próximos da validade;
+- C.A. próximos do vencimento;
+- trocas de EPI próximas;
+- trocas vencidas;
+- transferências aguardando recebimento;
+- custo de EPI no mês;
+- custo de EPI no ano.
+
+Filtros:
+- empresa;
+- unidade;
+- setor;
+- função;
+- centro de custo;
+- período.
+
+Gráficos simples:
+- consumo/custo por mês;
+- custo por categoria de EPI;
+- custo por centro de custo;
+- itens com maior consumo.
+
+Regras:
+- não carregar todos os dados sem agregação;
+- garantir bom desempenho;
+- gráfico deve adaptar-se ao celular;
+- valores devem ter origem rastreável nas movimentações;
+- perfis só enxergam unidades autorizadas.
+
+============================================================
+20. RELATÓRIOS E EXPORTAÇÕES
+============================================================
+
+Relatórios mínimos:
+- posição de estoque por local, produto, variante e lote;
+- movimentações de estoque;
+- entradas por nota fiscal;
+- transferências;
+- ficha de EPI por colaborador;
+- entregas por período;
+- entregas extraordinárias;
+- EPIs a vencer/trocar;
+- validade de C.A.;
+- lotes próximos do vencimento;
+- consumo por colaborador;
+- consumo por função;
+- consumo por setor;
+- custo por centro de custo;
+- custo por fornecedor;
+- custo por nota fiscal;
+- perdas, danos e extravios.
+
+Exportar:
+- CSV;
+- XLSX;
+- PDF quando fizer sentido documental.
+
+Regras:
+- respeitar os filtros da tela;
+- respeitar as permissões;
+- usar processamento eficiente;
+- incluir data/hora de emissão, usuário e filtros utilizados;
+- o registro eletrônico de fornecimento deve permitir extração de relatórios.
+
+============================================================
+21. IMPORTAÇÃO DOS DADOS LEGADOS
+============================================================
+
+Nesta Fase 1A:
+- analisar as planilhas;
+- documentar o mapeamento;
+- criar estrutura técnica para importação;
+- não importar silenciosamente dados reais;
+- implementar, no máximo, comandos de importação com:
+  --dry-run;
+  validação;
+  relatório de erros;
+  controle de duplicidade;
+  transação;
+  confirmação explícita.
+
+Mapeamentos identificados que devem ser considerados:
+
+Planilha EPIs ESTOQ.xlsx:
+- fornecedor;
+- produto;
+- estoque;
+- C.A.;
+- preço por unidade;
+- grade de tamanhos/numerações;
+- treinamentos de integração e NRs;
+- cronograma de capacitações;
+- tipo inicial/reciclagem/obrigatório;
+- situação e validade;
+- custos/orçamento;
+- participantes.
+
+Planilha PLANILHA DE ATUALIZAÇÃO ASO...xlsx:
+- nome;
+- unidade;
+- função;
+- setor;
+- CPF;
+- tipo de ASO;
+- data;
+- situação;
+- audiometria;
+- toxicológico;
+- telefone;
+- protetor plug e validade;
+- protetor concha e validade;
+- filtro químico e validade;
+- botas e validade;
+- fardas e tamanhos;
+- treinamentos de brigadista, elétrica, empilhadeira, trabalho em altura e caldeira;
+- sexo;
+- modelo de farda;
+- ordem de serviço.
+
+Documente inconsistências:
+- nomes de colunas duplicados;
+- grafias diferentes;
+- campos misturando EPI, ASO e treinamento;
+- ausência de identificadores únicos;
+- estoque total e estoque por tamanho no mesmo bloco;
+- datas e regras de validade calculadas de maneiras diferentes.
+
+Não trate a planilha como modelo definitivo do banco.
+Use-a apenas como fonte legada a ser normalizada.
+
+============================================================
+22. REGRAS LEGAIS E DE DOMÍNIO QUE DEVEM ORIENTAR A SPEC
+============================================================
+
+Sem fornecer parecer jurídico, a modelagem deve suportar:
+
+- registro eletrônico do fornecimento de EPI;
+- extração de relatórios;
+- C.A. válido no momento da aquisição;
+- controle separado da validade do C.A. e da validade física do produto;
+- lote, fabricante/importador e C.A. para itens disponibilizados;
+- seleção de EPI considerando atividade, riscos, adequação e compatibilidade;
+- orientação e treinamento relacionado ao EPI;
+- manutenção, higienização, substituição, dano e extravio;
+- histórico auditável;
+- treinamento por função nas fases futuras;
+- ASO e exames conforme parâmetros do PCMSO nas fases futuras;
+- prazos de ASO e exames não devem ser hardcoded universalmente;
+- periodicidade deve ser configurável conforme PCMSO, função, riscos e orientação médica;
+- dados médicos devem ter acesso restrito e não devem ser misturados aos dados operacionais de estoque.
+
+============================================================
+23. MODELAGEM, INTEGRIDADE E PERFORMANCE
+============================================================
+
+Exigir na SPEC:
+- diagrama textual das entidades e relações;
+- constraints;
+- chaves únicas;
+- índices;
+- estratégia de inativação;
+- estratégia de auditoria;
+- estratégia de concorrência;
+- estratégia de custos por lote;
+- estratégia de escopo por empresa/unidade;
+- estratégia para saldo;
+- estratégia de sincronização do CAEPI;
+- estratégia de documentos;
+- matriz de permissões.
+
+Implementar:
+- UniqueConstraint quando aplicável;
+- CheckConstraint para quantidades positivas e estados válidos;
+- validações de transição de status;
+- services para:
+  confirmar nota;
+  expedir transferência;
+  receber transferência;
+  entregar EPI;
+  devolver EPI;
+  substituir EPI;
+  ajustar estoque;
+  sincronizar C.A.;
+  gerar alertas;
+- selectors/query services para relatórios e dashboards;
+- auditoria das operações críticas;
+- idempotência em confirmações;
+- testes contra dupla confirmação;
+- otimização N+1;
+- paginação;
+- índices para datas, status, unidade, colaborador, produto, C.A., nota e local.
+
+============================================================
+24. INTERFACE E ROTAS
+============================================================
+
+Criar navegação principal clara:
+
+- Início
+- Colaboradores
+- EPIs
+- Almoxarifado
+- Estoque SST
+- Transferências
+- Entregas
+- Alertas
+- Relatórios
+- Cadastros
+- Administração de usuários, apenas para autorizados
+
+Padrões:
+- breadcrumbs simples;
+- cabeçalho com contexto de empresa/unidade;
+- busca global limitada aos objetos permitidos;
+- filtros em painel recolhível no celular;
+- ações principais destacadas;
+- ações perigosas separadas;
+- estados vazios úteis;
+- badges para status;
+- datas e valores formatados no padrão brasileiro;
+- mensagens de validação claras;
+- não colocar formulários operacionais somente no Django Admin.
+
+============================================================
+25. TESTES OBRIGATÓRIOS
+============================================================
+
+Criar testes para, no mínimo:
+
+Autenticação e permissão:
+- usuário não autenticado;
+- Técnico SST;
+- Almoxarife;
+- acesso entre unidades;
+- tentativa de acesso direto por URL;
+- Almoxarife sem acesso a dados restritos.
+
+Cadastros:
+- CPF;
+- matrícula;
+- inativação;
+- mudança de função;
+- matriz por função;
+- EPI extraordinário separado do principal.
+
+Estoque:
+- entrada por nota;
+- confirmação duplicada;
+- saldo correto;
+- tentativa de estoque negativo;
+- transferência completa;
+- recebimento duplicado;
+- cancelamento/estorno;
+- divergência;
+- entrega individual;
+- devolução;
+- substituição;
+- baixa;
+- consistência por lote e variante.
+
+Custos:
+- subtotal;
+- total da nota;
+- custo da entrega;
+- custo por centro de custo;
+- preservação do custo histórico.
+
+C.A.:
+- normalização;
+- importação dry-run;
+- upsert;
+- C.A. encontrado;
+- não encontrado;
+- vencido;
+- desatualizado;
+- fallback manual com justificativa.
+
+Alertas:
+- criação;
+- deduplicação;
+- resolução;
+- faixas de prazo.
+
+Interface:
+- smoke tests das telas principais;
+- formulários com validação;
+- paginação;
+- ausência de N+1 crítico nas listas principais, quando viável.
+
+Comandos finais:
+- python manage.py check
+- python manage.py makemigrations --check
+- python manage.py migrate
+- python manage.py test
+
+Se usar ferramentas adicionais de lint:
+- execute e documente;
+- não faça alterações massivas automáticas sem revisão.
+
+============================================================
+26. DOCUMENTAÇÃO OBRIGATÓRIA
+============================================================
+
+Criar ou atualizar dentro do projeto:
+
+- README.md
+  - objetivo;
+  - requisitos;
+  - instalação;
+  - variáveis de ambiente;
+  - banco;
+  - migrations;
+  - criação de superuser;
+  - execução;
+  - testes;
+  - comandos de C.A.;
+  - comandos de alertas;
+  - backup;
+  - estrutura dos módulos.
+
+- .env.example
+  - sem segredos reais.
+
+- contexto/SPEC_fase_1a_fundacao_estoque_epi.md
+
+- contexto/ROADMAP_sst_freedom.md
+
+- contexto/MAPEAMENTO_planilhas_legadas.md
+
+- contexto/ARQUITETURA_sst_freedom.md
+  - decisões;
+  - módulos;
+  - fluxo de estoque;
+  - permissões;
+  - pontos de extensão.
+
+- contexto/OPERACAO_inicial.md
+  - passos para configurar empresa;
+  - unidade;
+  - estoques;
+  - usuários;
+  - fornecedores;
+  - C.A.;
+  - produtos;
+  - nota fiscal;
+  - transferência;
+  - colaborador;
+  - matriz;
+  - entrega.
+
+============================================================
+27. CRITÉRIOS DE ACEITAÇÃO DA FASE 1A
+============================================================
+
+A fase só pode ser considerada concluída quando:
+
+1. Existe um único projeto Django funcional.
+2. O usuário customizado foi criado antes das migrations de produção.
+3. Os perfis Técnico SST e Almoxarife possuem permissões distintas.
+4. É possível cadastrar empresa, unidade, setor, centro de custo, função e colaborador.
+5. É possível cadastrar EPI com variantes e C.A.
+6. É possível importar a base oficial de C.A. por comando local.
+7. É possível registrar fornecedor, nota fiscal, lote, validade e custo.
+8. Confirmar a nota aumenta o estoque do Almoxarifado.
+9. É possível transferir do Almoxarifado para o SST.
+10. O recebimento aumenta o estoque SST.
+11. É possível definir EPI principal por função.
+12. É possível definir EPI extraordinário sem alterar a matriz da função.
+13. É possível entregar EPI ao colaborador usando estoque SST.
+14. A entrega reduz o saldo correto e registra lote, C.A., custo e próxima troca.
+15. Não é possível deixar o estoque negativo.
+16. Todos os movimentos críticos são auditados.
+17. O dashboard mostra saldos, alertas e custos.
+18. Os relatórios mínimos podem ser extraídos.
+19. A interface funciona adequadamente em smartphone.
+20. Os testes passam.
+21. O QA registra aprovação ou bloqueios objetivos.
+22. Nenhuma planilha original foi modificada.
+23. Nenhum arquivo fora da pasta atual foi alterado.
+
+============================================================
+28. USO DOS SUBAGENTES
+============================================================
+
+SUBAGENTE 1 — ARQUITETO
+Responsabilidades:
+- ler contexto e planilhas;
+- documentar o estado inicial;
+- criar a SPEC;
+- definir modelos, serviços, permissões, fluxos e critérios;
+- identificar riscos;
+- evitar superengenharia;
+- garantir extensibilidade para treinamentos e ASO;
+- não implementar antes da revisão da SPEC.
+
+SUBAGENTE 2 — BACKEND
+Responsabilidades:
+- implementar somente após SPEC aprovada;
+- seguir os limites definidos;
+- criar migrations seguras;
+- implementar regras no backend;
+- construir templates responsivos;
+- criar testes;
+- documentar decisões;
+- não contornar erros desabilitando validações.
+
+SUBAGENTE 3 — QA
+Responsabilidades:
+- revisar a SPEC antes da implementação;
+- revisar as migrations;
+- testar permissões;
+- testar fluxos de estoque e custos;
+- testar C.A. e alertas;
+- validar responsividade;
+- procurar regressões e inconsistências;
+- conferir que as planilhas não foram modificadas;
+- emitir parecer final:
+  APROVADO;
+  APROVADO COM RESSALVAS;
+  REPROVADO/BLOQUEADO.
+
+============================================================
+29. PROIBIÇÕES
+============================================================
+
+- Não criar novo .venv.
+- Não trabalhar fora da pasta atual.
+- Não modificar os arquivos da pasta fontes.
+- Não criar mais de um projeto Django.
+- Não usar o Django Admin como única interface.
+- Não armazenar estoque apenas em campo editável.
+- Não permitir estoque negativo.
+- Não apagar movimentos concluídos.
+- Não criar saldo por gatilho escondido.
+- Não fazer scraping frágil do CAEPI.
+- Não hardcodar vencimentos universais de EPI, C.A., ASO ou treinamento.
+- Não misturar C.A., validade do lote e vida útil após entrega.
+- Não permitir que EPI extraordinário vire EPI principal da função.
+- Não expor dados entre unidades.
+- Não expor dados médicos ao Almoxarife.
+- Não criar funcionalidades das fases futuras pela metade.
+- Não inserir credenciais, chaves ou senhas no repositório.
+- Não mascarar falhas de teste.
+- Não declarar concluído se os testes ou critérios de aceitação não forem atendidos.
+
+============================================================
+30. ENTREGA FINAL OBRIGATÓRIA
+============================================================
+
+Ao final, apresente um relatório contendo:
+
+1. Resumo da solução implementada.
+2. Estado inicial encontrado.
+3. Arquivos lidos.
+4. Arquivos criados.
+5. Arquivos alterados.
+6. Migrations criadas.
+7. Modelos e relações.
+8. Rotas e telas.
+9. Matriz de permissões implementada.
+10. Serviços de domínio criados.
+11. Regras de estoque e custos.
+12. Estratégia de C.A.
+13. Testes realizados, com comandos e resultados.
+14. Validação de responsividade.
+15. Riscos, limitações e pendências.
+16. Itens expressamente não implementados por pertencerem às próximas fases.
+17. Parecer final do QA.
+18. Nome sugerido do commit Git.
+
+Não faça commit, push, deploy ou alteração em produção sem autorização expressa.

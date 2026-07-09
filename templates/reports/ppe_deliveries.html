@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório de Entregas de EPI - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'report_list' %}" class="text-primary text-decoration-none">Relatórios</a></li>
+<li class="breadcrumb-item active text-secondary" aria-current="page">Relatório de Entregas</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Relatório de Fornecimentos Individuais (EPI)</h1>
+    <a href="{% url 'report_list' %}" class="btn btn-outline-secondary btn-premium">Voltar</a>
+</div>
+
+<div class="card-premium">
+    <div class="table-responsive">
+        <table class="table table-premium mb-0">
+            <thead>
+                <tr>
+                    <th class="text-muted border-0">Colaborador / CPF</th>
+                    <th class="text-muted border-0">EPI / Variante</th>
+                    <th class="text-muted border-0">C.A. / Lote</th>
+                    <th class="text-muted border-0">Data Fornecimento</th>
+                    <th class="text-muted border-0 text-end">Custo Histórico</th>
+                    <th class="text-muted border-0 text-center">Assinatura</th>
+                    <th class="text-muted border-0">Registrado por</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for del in deliveries %}
+                <tr>
+                    <td class="text-light fw-semibold">
+                        {{ del.employee.nome_completo }}
+                        <small class="text-muted d-block">CPF: {{ del.employee.cpf }}</small>
+                    </td>
+                    <td class="text-light">
+                        {{ del.product_variant.product.nome }}
+                        <small class="text-muted d-block">Tamanho: {{ del.product_variant.tamanho }}</small>
+                    </td>
+                    <td>
+                        {{ del.ca_entregue.numero_exibicao|default:"CA N/A" }}
+                        <small class="text-muted d-block">Lote: {{ del.lot.identificador }}</small>
+                    </td>
+                    <td>{{ del.data_entrega|date:"d/m/Y" }}</td>
+                    <td class="text-end text-light fw-medium">R$ {{ del.custo_unitario|floatformat:2 }}</td>
+                    <td class="text-center">
+                        {% if del.status_assinatura == 'ASSINADO' %}
+                        <span class="badge bg-success" title="Confirmado eletronicamente em {{ del.confirmacao_data_hora|date:'d/m/Y H:i' }}"><i class="bi text-white bi-check-lg"></i> Assinado</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark"><i class="bi bi-clock"></i> Pendente</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ del.usuario_responsavel.username }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted border-0 py-4">Nenhum fornecimento de EPI registrado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

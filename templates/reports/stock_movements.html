@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Movimentações de Estoque - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'report_list' %}" class="text-primary text-decoration-none">Relatórios</a></li>
+<li class="breadcrumb-item active text-secondary" aria-current="page">Movimentações</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Relatório de Movimentações de Estoque (Livro-Razão)</h1>
+    <a href="{% url 'report_list' %}" class="btn btn-outline-secondary btn-premium">Voltar</a>
+</div>
+
+<div class="card-premium">
+    <div class="table-responsive">
+        <table class="table table-premium mb-0">
+            <thead>
+                <tr>
+                    <th class="text-muted border-0">Data / Registro</th>
+                    <th class="text-muted border-0">EPI / Variante</th>
+                    <th class="text-muted border-0">Lote</th>
+                    <th class="text-muted border-0">Origem / Local</th>
+                    <th class="text-muted border-0 text-center">Quantidade</th>
+                    <th class="text-muted border-0">Operação</th>
+                    <th class="text-muted border-0">Responsável</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mov in movements %}
+                <tr>
+                    <td>{{ mov.created_at|date:"d/m/Y H:i:s" }}</td>
+                    <td class="text-light fw-semibold">
+                        {{ mov.product_variant.product.nome }}
+                        <small class="text-muted d-block">Tamanho: {{ mov.product_variant.tamanho }}</small>
+                    </td>
+                    <td>{{ mov.lot.identificador }}</td>
+                    <td>{{ mov.location.nome }} <small class="text-muted d-block">{{ mov.unit.codigo }}</small></td>
+                    <td class="text-center fw-bold {% if mov.quantity > 0 %}text-success{% else %}text-danger{% endif %}">
+                        {% if mov.quantity > 0 %}+{% endif %}{{ mov.quantity }}
+                    </td>
+                    <td>
+                        <span class="badge bg-secondary">{{ mov.get_movement_type_display }}</span>
+                    </td>
+                    <td>{{ mov.user.username }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted border-0 py-4">Nenhuma movimentação de estoque registrada.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

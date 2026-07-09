@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Colaborador - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'employee_list' %}" class="text-primary text-decoration-none">Colaboradores</a></li>
+<li class="breadcrumb-item active text-secondary" aria-current="page">Editar Colaborador</li>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-10">
+        <div class="card-premium card-primary">
+            <h3 class="mb-4">{% if object %}Editar Colaborador{% else %}Novo Colaborador{% endif %}</h3>
+            
+            <form method="post">
+                {% csrf_token %}
+                
+                <h5 class="text-primary mb-3"><i class="bi bi-person-fill"></i> Dados Pessoais</h5>
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-md-6">
+                        <label for="id_nome_completo" class="form-label text-secondary fw-semibold">Nome Completo</label>
+                        <input type="text" name="nome_completo" id="id_nome_completo" class="form-control form-control-premium" value="{{ form.nome_completo.value|default:'' }}" required>
+                        {{ form.nome_completo.errors }}
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label for="id_cpf" class="form-label text-secondary fw-semibold">CPF</label>
+                        <input type="text" name="cpf" id="id_cpf" class="form-control form-control-premium" value="{{ form.cpf.value|default:'' }}" required placeholder="Apenas números">
+                        {{ form.cpf.errors }}
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label for="id_matricula" class="form-label text-secondary fw-semibold">Matrícula</label>
+                        <input type="text" name="matricula" id="id_matricula" class="form-control form-control-premium" value="{{ form.matricula.value|default:'' }}" required>
+                        {{ form.matricula.errors }}
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label for="id_telefone" class="form-label text-secondary fw-semibold">Telefone</label>
+                        <input type="text" name="telefone" id="id_telefone" class="form-control form-control-premium" value="{{ form.telefone.value|default:'' }}">
+                        {{ form.telefone.errors }}
+                    </div>
+                    <div class="col-12 col-md-8">
+                        <label for="id_email" class="form-label text-secondary fw-semibold">E-mail</label>
+                        <input type="email" name="email" id="id_email" class="form-control form-control-premium" value="{{ form.email.value|default:'' }}">
+                        {{ form.email.errors }}
+                    </div>
+                </div>
+
+                <h5 class="text-success mb-3"><i class="bi bi-briefcase-fill"></i> Dados Funcionais</h5>
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-md-6">
+                        <label for="id_company" class="form-label text-secondary fw-semibold">Empresa</label>
+                        <select name="company" id="id_company" class="form-select form-control-premium" required>
+                            {% for choice in form.company.field.queryset %}
+                            <option value="{{ choice.id }}" {% if form.company.value|stringformat:"s" == choice.id|stringformat:"s" %}selected{% endif %}>{{ choice.nome_fantasia }}</option>
+                            {% endfor %}
+                        </select>
+                        {{ form.company.errors }}
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label for="id_unit" class="form-label text-secondary fw-semibold">Filial / Unidade</label>
+                        <select name="unit" id="id_unit" class="form-select form-control-premium" required>
+                            {% for choice in form.unit.field.queryset %}
+                            <option value="{{ choice.id }}" {% if form.unit.value|stringformat:"s" == choice.id|stringformat:"s" %}selected{% endif %}>{{ choice.codigo }} - {{ choice.nome }}</option>
+                            {% endfor %}
+                        </select>
+                        {{ form.unit.errors }}
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label for="id_funcao" class="form-label text-secondary fw-semibold">Função / Cargo</label>
+                        <select name="funcao" id="id_funcao" class="form-select form-control-premium" required>
+                            {% for choice in form.funcao.field.queryset %}
+                            <option value="{{ choice.id }}" {% if form.funcao.value|stringformat:"s" == choice.id|stringformat:"s" %}selected{% endif %}>{{ choice.nome }}</option>
+                            {% endfor %}
+                        </select>
+                        {{ form.funcao.errors }}
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label for="id_setor" class="form-label text-secondary fw-semibold">Setor</label>
+                        <select name="setor" id="id_setor" class="form-select form-control-premium" required>
+                            {% for choice in form.setor.field.queryset %}
+                            <option value="{{ choice.id }}" {% if form.setor.value|stringformat:"s" == choice.id|stringformat:"s" %}selected{% endif %}>{{ choice.nome }} ({{ choice.unit.codigo }})</option>
+                            {% endfor %}
+                        </select>
+                        {{ form.setor.errors }}
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label for="id_centro_custo" class="form-label text-secondary fw-semibold">Centro de Custo</label>
+                        <select name="centro_custo" id="id_centro_custo" class="form-select form-control-premium" required>
+                            {% for choice in form.centro_custo.field.queryset %}
+                            <option value="{{ choice.id }}" {% if form.centro_custo.value|stringformat:"s" == choice.id|stringformat:"s" %}selected{% endif %}>{{ choice.codigo }} - {{ choice.nome }}</option>
+                            {% endfor %}
+                        </select>
+                        {{ form.centro_custo.errors }}
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label for="id_turno" class="form-label text-secondary fw-semibold">Turno</label>
+                        <select name="turno" id="id_turno" class="form-select form-control-premium" required>
+                            {% for code, label in form.fields.turno.choices %}
+                            <option value="{{ code }}" {% if form.turno.value == code %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        {{ form.turno.errors }}
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label for="id_data_admissao" class="form-label text-secondary fw-semibold">Data de Admissão</label>
+                        <input type="date" name="data_admissao" id="id_data_admissao" class="form-control form-control-premium" value="{{ form.data_admissao.value|date:'Y-m-d'|default:form.data_admissao.value|default:'' }}" required>
+                        {{ form.data_admissao.errors }}
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label for="id_situacao" class="form-label text-secondary fw-semibold">Situação</label>
+                        <select name="situacao" id="id_situacao" class="form-select form-control-premium" required>
+                            {% for code, label in form.fields.situacao.choices %}
+                            <option value="{{ code }}" {% if form.situacao.value == code %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        {{ form.situacao.errors }}
+                    </div>
+                    {% if object %}
+                    <div class="col-12 col-md-4">
+                        <label for="id_data_desligamento" class="form-label text-secondary fw-semibold">Data de Desligamento</label>
+                        <input type="date" name="data_desligamento" id="id_data_desligamento" class="form-control form-control-premium" value="{{ form.data_desligamento.value|date:'Y-m-d'|default:form.data_desligamento.value|default:'' }}">
+                        {{ form.data_desligamento.errors }}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <h5 class="text-warning mb-3"><i class="bi bi-rulers"></i> Grade de Tamanhos</h5>
+                <div class="row g-3 mb-4">
+                    <div class="col-6 col-md-3">
+                        <label for="id_tamanho_camisa" class="form-label text-secondary fw-semibold">Tamanho Camisa</label>
+                        <input type="text" name="tamanho_camisa" id="id_tamanho_camisa" class="form-control form-control-premium" value="{{ form.tamanho_camisa.value|default:'' }}" placeholder="P, M, G, GG, XG...">
+                        {{ form.tamanho_camisa.errors }}
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label for="id_tamanho_calca" class="form-label text-secondary fw-semibold">Tamanho Calça</label>
+                        <input type="text" name="tamanho_calca" id="id_tamanho_calca" class="form-control form-control-premium" value="{{ form.tamanho_calca.value|default:'' }}" placeholder="P, M, G, GG, XG...">
+                        {{ form.tamanho_calca.errors }}
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label for="id_num_calcado" class="form-label text-secondary fw-semibold">Numeração Calçado</label>
+                        <input type="number" name="num_calcado" id="id_num_calcado" class="form-control form-control-premium" value="{{ form.num_calcado.value|default:'' }}" placeholder="35 a 44">
+                        {{ form.num_calcado.errors }}
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label for="id_tamanho_luva" class="form-label text-secondary fw-semibold">Tamanho Luva</label>
+                        <input type="text" name="tamanho_luva" id="id_tamanho_luva" class="form-control form-control-premium" value="{{ form.tamanho_luva.value|default:'' }}" placeholder="P, M, G, GG...">
+                        {{ form.tamanho_luva.errors }}
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label for="id_modelo_farda" class="form-label text-secondary fw-semibold">Modelo de Farda</label>
+                        <input type="text" name="modelo_farda" id="id_modelo_farda" class="form-control form-control-premium" value="{{ form.modelo_farda.value|default:'' }}">
+                        {{ form.modelo_farda.errors }}
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label for="id_observacoes" class="form-label text-secondary fw-semibold">Observações Operacionais</label>
+                    <textarea name="observacoes" id="id_observacoes" rows="3" class="form-control form-control-premium">{{ form.observacoes.value|default:'' }}</textarea>
+                    {{ form.observacoes.errors }}
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-premium btn-premium-primary px-4">
+                        <i class="bi bi-check-lg me-2"></i> Salvar Colaborador
+                    </button>
+                    <a href="{% url 'employee_list' %}" class="btn btn-outline-secondary btn-premium px-4">
+                        Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

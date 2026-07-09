@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Painel de Alertas - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item active text-secondary" aria-current="page">Painel de Alertas</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Alertas Ativos</h1>
+</div>
+
+<div class="card-premium animate-fade-in">
+    <div class="table-responsive">
+        <table class="table table-premium mb-0">
+            <thead>
+                <tr>
+                    <th class="text-muted border-0">Gravidade</th>
+                    <th class="text-muted border-0">Título / Alerta</th>
+                    <th class="text-muted border-0">Mensagem</th>
+                    <th class="text-muted border-0">Unidade</th>
+                    <th class="text-muted border-0">Criado em</th>
+                    <th class="text-muted border-0 text-center">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alert in alerts %}
+                <tr>
+                    <td>
+                        <span class="badge-premium {% if alert.severity == 'CRITICAL' %}badge-premium-danger{% elif alert.severity == 'WARNING' %}badge-premium-warning{% else %}badge-premium-info{% endif %}">
+                            {{ alert.get_severity_display }}
+                        </span>
+                    </td>
+                    <td class="text-light fw-semibold">{{ alert.title }}</td>
+                    <td class="text-secondary small">{{ alert.message }}</td>
+                    <td>{{ alert.unit.codigo }}</td>
+                    <td>{{ alert.created_at|date:"d/m/Y H:i" }}</td>
+                    <td class="text-center">
+                        <form method="post" action="{% url 'alert_resolve' alert.id %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-success rounded-3">
+                                <i class="bi bi-check-circle-fill"></i> Resolver
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted border-0 py-5">
+                        <i class="bi bi-shield-check-fill fs-1 text-success mb-3 d-block"></i>
+                        Nenhum alerta pendente. Todos os sistemas funcionando perfeitamente!
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

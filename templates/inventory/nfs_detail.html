@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhe da Nota Fiscal - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'fiscal_note_list' %}" class="text-primary text-decoration-none">Notas Fiscais</a></li>
+<li class="breadcrumb-item active text-secondary" aria-current="page">Nota {{ note.numero }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Nota Fiscal Nº {{ note.numero }}</h1>
+    <div>
+        {% if note.status == 'RASCUNHO' %}
+        <form method="post" action="{% url 'fiscal_note_confirm' note.id %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-premium btn-premium-primary">
+                <i class="bi bi-shield-fill-check me-2"></i> Confirmar Nota Fiscal
+            </button>
+        </form>
+        {% endif %}
+        <a href="{% url 'fiscal_note_list' %}" class="btn btn-outline-secondary btn-premium ms-2">Voltar</a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Informações da Nota -->
+    <div class="col-12 col-md-4">
+        <div class="card-premium card-primary">
+            <h4 class="mb-3 text-light">Dados da Nota</h4>
+            <div class="row g-3 text-secondary">
+                <div class="col-12">
+                    <small class="text-muted d-block">Fornecedor</small>
+                    <span class="text-light fw-semibold">{{ note.supplier.razao_social }}</span>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Unidade Recebedora</small>
+                    <span class="text-light">{{ note.unit.codigo }}</span>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Status</small>
+                    {% if note.status == 'RASCUNHO' %}
+                    <span class="badge bg-secondary">Rascunho</span>
+                    {% elif note.status == 'CONFERIDA' %}
+                    <span class="badge bg-success">Conferida</span>
+                    {% else %}
+                    <span class="badge bg-danger">Cancelada</span>
+                    {% endif %}
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Data Emissão</small>
+                    <span class="text-light">{{ note.data_emissao|date:"d/m/Y" }}</span>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Data Recebimento</small>
+                    <span class="text-light">{{ note.data_recebimento|date:"d/m/Y" }}</span>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Valor Total</small>
+                    <span class="text-light fw-bold">R$ {{ note.valor_total|floatformat:2 }}</span>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Centro de Custo</small>
+                    <span class="text-light">{{ note.centro_custo.codigo }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Itens / Lotes -->
+    <div class="col-12 col-md-8">
+        <div class="card-premium mb-4">
+            <h4 class="mb-3 text-light">Lotes de EPIs Recebidos</h4>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">EPI / Variante</th>
+                            <th class="text-muted border-0">Lote Fabricante</th>
+                            <th class="text-muted border-0">Validade Física</th>
+                            <th class="text-muted border-0 text-center">Quantidade</th>
+                            <th class="text-muted border-0 text-end">Custo Unit.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lot in lots %}
+                        <tr>
+                            <td class="text-light fw-semibold">
+                                {{ lot.product_variant.product.nome }}
+                                <small class="text-muted d-block">Tamanho: {{ lot.product_variant.tamanho }}</small>
+                            </td>
+                            <td>{{ lot.identificador }}</td>
+                            <td>{{ lot.data_validade|date:"d/m/Y" }}</td>
+                            <td class="text-center text-light">{{ lot.quantidade_inicial }}</td>
+                            <td class="text-end text-light">R$ {{ lot.custo_unitario|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted border-0 py-4">Nenhum lote associado a esta nota fiscal.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Adicionar Lote se em Rascunho -->
+        {% if note.status == 'RASCUNHO' %}
+        <div class="card-premium">
+            <h4 class="mb-3 text-success">Adicionar Lote de EPI</h4>
+            <form method="post" action="{% url 'lot_create' note.id %}">
+                {% csrf_token %}
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <label for="id_product_variant" class="form-label text-secondary fw-semibold">EPI / Variante</label>
+                        <select name="product_variant" id="id_product_variant" class="form-select form-control-premium" required>
+                            {% for variant in variants %}
+                            <option value="{{ variant.id }}">{{ variant.product.nome }} (Tamanho: {{ variant.tamanho }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label for="id_identificador" class="form-label text-secondary fw-semibold">Identificador do Lote</label>
+                        <input type="text" name="identificador" id="id_identificador" class="form-control form-control-premium" required>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label for="id_data_fabricacao" class="form-label text-secondary fw-semibold">Data Fabricação (Opcional)</label>
+                        <input type="date" name="data_fabricacao" id="id_data_fabricacao" class="form-control form-control-premium">
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label for="id_data_validade" class="form-label text-secondary fw-semibold">Data Validade Física</label>
+                        <input type="date" name="data_validade" id="id_data_validade" class="form-control form-control-premium" required>
+                    </div>
+                    <div class="col-6 col-md-6">
+                        <label for="id_quantidade_inicial" class="form-label text-secondary fw-semibold">Quantidade Inicial</label>
+                        <input type="number" name="quantidade_inicial" id="id_quantidade_inicial" class="form-control form-control-premium" required>
+                    </div>
+                    <div class="col-6 col-md-6">
+                        <label for="id_custo_unitario" class="form-label text-secondary fw-semibold">Custo Unitário</label>
+                        <input type="number" step="0.01" name="custo_unitario" id="id_custo_unitario" class="form-control form-control-premium" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-premium btn-premium-primary mt-4">
+                    <i class="bi bi-plus-lg me-2"></i> Adicionar Lote
+                </button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Relatórios - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item active text-secondary" aria-current="page">Relatórios</li>
+{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h1>Relatórios e Consultas</h1>
+    <p class="text-secondary">Selecione uma das opções abaixo para visualizar dados detalhados da operação.</p>
+</div>
+
+<div class="row g-4">
+    <!-- Relatório 1: Posição de Estoque -->
+    <div class="col-12 col-md-6 col-xl-4">
+        <a href="{% url 'report_stock_position' %}" class="text-decoration-none">
+            <div class="card-premium card-primary h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="text-light mb-0">Posição de Estoque</h5>
+                    <i class="bi bi-pie-chart-fill text-primary fs-3"></i>
+                </div>
+                <p class="text-secondary small mb-0">Visualização de saldo atual por local de estoque, produto, variante e lote.</p>
+            </div>
+        </a>
+    </div>
+
+    <!-- Relatório 2: Movimentações de Estoque -->
+    <div class="col-12 col-md-6 col-xl-4">
+        <a href="{% url 'report_stock_movements' %}" class="text-decoration-none">
+            <div class="card-premium card-success h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="text-light mb-0">Movimentações de Estoque</h5>
+                    <i class="bi bi-clock-history text-success fs-3"></i>
+                </div>
+                <p class="text-secondary small mb-0">Livro-Razão de todas as entradas, transferências, saídas e baixas físicas.</p>
+            </div>
+        </a>
+    </div>
+
+    <!-- Relatório 3: Entregas de EPI -->
+    <div class="col-12 col-md-6 col-xl-4">
+        <a href="{% url 'report_ppe_deliveries' %}" class="text-decoration-none">
+            <div class="card-premium card-warning h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="text-light mb-0">Entregas de EPIs</h5>
+                    <i class="bi bi-journal-text text-warning fs-3"></i>
+                </div>
+                <p class="text-secondary small mb-0">Histórico detalhado de EPIs fornecidos, assinaturas eletrônicas e validades.</p>
+            </div>
+        </a>
+    </div>
+
+    <!-- Relatório 4: Validade de C.A. -->
+    <div class="col-12 col-md-6 col-xl-4">
+        <a href="{% url 'report_ca_validity' %}" class="text-decoration-none">
+            <div class="card-premium card-danger h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="text-light mb-0">Validade de C.A.</h5>
+                    <i class="bi bi-patch-exclamation-fill text-danger fs-3"></i>
+                </div>
+                <p class="text-secondary small mb-0">Controle de vencimentos de Certificados de Aprovação importados ou manuais.</p>
+            </div>
+        </a>
+    </div>
+</div>
+{% endblock %}

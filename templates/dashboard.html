@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item active text-secondary" aria-current="page">Painel Principal</li>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+    <!-- Card Saldo Almoxarifado -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card-premium card-primary">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="text-secondary fw-semibold">Saldo Almoxarifado</span>
+                <i class="bi bi-box-seam fs-3 text-primary"></i>
+            </div>
+            <h2 class="mb-0 fw-bold">{{ bal_almox }} <small class="fs-6 text-muted">unidades</small></h2>
+            <div class="text-muted mt-2 small">Estoque Central</div>
+        </div>
+    </div>
+
+    <!-- Card Saldo SST -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card-premium card-success">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="text-secondary fw-semibold">Saldo Estoque SST</span>
+                <i class="bi bi-shield-check fs-3 text-success"></i>
+            </div>
+            <h2 class="mb-0 fw-bold">{{ bal_sst }} <small class="fs-6 text-muted">unidades</small></h2>
+            <div class="text-muted mt-2 small">Disponível para Entrega</div>
+        </div>
+    </div>
+
+    <!-- Card Custos Mês -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card-premium card-warning">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="text-secondary fw-semibold">Custo EPIs (Mês)</span>
+                <i class="bi bi-cash-stack fs-3 text-warning"></i>
+            </div>
+            <h2 class="mb-0 fw-bold">R$ {{ cost_month|floatformat:2 }}</h2>
+            <div class="text-muted mt-2 small">Mês corrente</div>
+        </div>
+    </div>
+
+    <!-- Card Alertas Ativos -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card-premium card-danger">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="text-secondary fw-semibold">Alertas Críticos</span>
+                <i class="bi bi-bell-fill fs-3 text-danger animate-pulse"></i>
+            </div>
+            <h2 class="mb-0 fw-bold">{{ alerts_count }} <small class="fs-6 text-muted">pendentes</small></h2>
+            <div class="text-muted mt-2 small">Ações recomendadas</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Coluna da Esquerda: Alertas Ativos -->
+    <div class="col-12 col-lg-6">
+        <div class="card-premium">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="mb-0"><i class="bi bi-exclamation-octagon text-danger me-2"></i> Últimos Alertas</h4>
+                <a href="{% url 'alert_list' %}" class="btn btn-sm btn-outline-primary rounded-pill">Ver Todos</a>
+            </div>
+            
+            {% if active_alerts %}
+            <div class="list-group list-group-flush bg-transparent">
+                {% for alert in active_alerts %}
+                <div class="list-group-item bg-transparent border-secondary px-0 py-3 text-secondary">
+                    <div class="d-flex w-100 justify-content-between align-items-center mb-1">
+                        <span class="badge-premium {% if alert.severity == 'CRITICAL' %}badge-premium-danger{% elif alert.severity == 'WARNING' %}badge-premium-warning{% else %}badge-premium-info{% endif %}">
+                            {{ alert.get_severity_display }}
+                        </span>
+                        <small class="text-muted">{{ alert.created_at|date:"d/m/Y H:i" }}</small>
+                    </div>
+                    <h6 class="mb-1 text-light">{{ alert.title }}</h6>
+                    <p class="mb-0 small">{{ alert.message }}</p>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-shield-check fs-1 text-success mb-3 d-block"></i>
+                Nenhum alerta crítico ativo nas suas unidades.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Coluna da Direita: Estoques Críticos -->
+    <div class="col-12 col-lg-6">
+        <div class="card-premium">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="mb-0"><i class="bi bi-graph-down-arrow text-warning me-2"></i> Estoques abaixo do Mínimo</h4>
+            </div>
+
+            {% if below_min %}
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">EPI</th>
+                            <th class="text-muted border-0">Local / Unid.</th>
+                            <th class="text-muted border-0 text-center">Saldo</th>
+                            <th class="text-muted border-0 text-center">Mínimo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in below_min %}
+                        <tr>
+                            <td class="text-light border-secondary">
+                                {{ item.product }} <small class="text-muted d-block">Tamanho: {{ item.tamanho }}</small>
+                            </td>
+                            <td class="border-secondary">{{ item.location }} <small class="text-muted d-block">{{ item.unit }}</small></td>
+                            <td class="text-center text-danger fw-bold border-secondary">{{ item.saldo }}</td>
+                            <td class="text-center border-secondary">{{ item.minimo }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-clipboard-check fs-1 text-success mb-3 d-block"></i>
+                Todos os estoques estão adequados aos níveis mínimos.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Ciência de Recebimento de EPI - SST Freedom{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+        <div class="card-premium card-warning">
+            <div class="text-center mb-4">
+                <i class="bi bi-shield-lock-fill text-warning fs-1"></i>
+                <h3 class="mt-2 text-light">Declaração de Recebimento de EPI</h3>
+                <p class="text-secondary small">Confirmação eletrônica de fornecimento e termo de responsabilidade</p>
+            </div>
+
+            <div class="bg-dark bg-opacity-20 border border-secondary p-3 rounded-4 mb-4 text-secondary small">
+                <p class="mb-2"><strong>Declaro que recebi da empresa o Equipamento de Proteção Individual (EPI) abaixo detalhado:</strong></p>
+                <div class="row g-2 mb-3 text-light">
+                    <div class="col-6"><strong>EPI:</strong> {{ delivery.product_variant.product.nome }}</div>
+                    <div class="col-6"><strong>Tamanho:</strong> {{ delivery.product_variant.tamanho }}</div>
+                    <div class="col-6"><strong>C.A.:</strong> {{ delivery.ca_entregue.numero_exibicao|default:"CA N/A" }}</div>
+                    <div class="col-6"><strong>Lote:</strong> {{ delivery.lot.identificador }}</div>
+                    <div class="col-12"><strong>Data de Fornecimento:</strong> {{ delivery.data_entrega|date:"d/m/Y" }}</div>
+                </div>
+                <p class="mb-0 text-muted" style="text-align: justify;">
+                    Comprometo-me a usá-lo adequadamente durante a minha jornada de trabalho, guardá-lo e conservá-lo de acordo com as instruções recebidas, e comunicar qualquer dano ou perda para substituição imediata, em conformidade com as obrigações da NR-06 do Ministério do Trabalho e Emprego.
+                </p>
+            </div>
+
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-4">
+                    <label for="nome_confirmacao" class="form-label text-secondary fw-semibold">Nome Completo do Trabalhador (para assinatura)</label>
+                    <input type="text" name="nome_confirmacao" id="nome_confirmacao" class="form-control form-control-premium" placeholder="Digite seu nome exatamente como no cadastro" required value="{{ delivery.employee.nome_completo }}">
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-premium btn-premium-primary w-100 py-3">
+                        <i class="bi bi-patch-check-fill me-2"></i> Confirmar e Assinar Recibo
+                    </button>
+                    <a href="{% url 'employee_detail' delivery.employee.id %}" class="btn btn-outline-secondary btn-premium px-4">
+                        Pular
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

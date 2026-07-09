@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Transferências de Estoque - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item active text-secondary" aria-current="page">Transferências</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Transferências Almoxarifado ➔ SST</h1>
+    <a href="{% url 'transfer_create' %}" class="btn btn-premium btn-premium-primary">
+        <i class="bi bi-arrow-left-right me-2"></i> Nova Transferência
+    </a>
+</div>
+
+<div class="card-premium">
+    <div class="table-responsive">
+        <table class="table table-premium mb-0">
+            <thead>
+                <tr>
+                    <th class="text-muted border-0">Cód / ID</th>
+                    <th class="text-muted border-0">Origem ➔ Destino</th>
+                    <th class="text-muted border-0">Unidade</th>
+                    <th class="text-muted border-0">Expedido em</th>
+                    <th class="text-muted border-0">Responsáveis</th>
+                    <th class="text-muted border-0 text-center">Status</th>
+                    <th class="text-muted border-0 text-center">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for transfer in transfers %}
+                <tr>
+                    <td class="text-light fw-semibold">TR-{{ transfer.id }}</td>
+                    <td class="text-light">
+                        {{ transfer.source_location.nome }}
+                        <i class="bi bi-arrow-right mx-2 text-primary"></i>
+                        {{ transfer.dest_location.nome }}
+                    </td>
+                    <td>{{ transfer.unit.codigo }}</td>
+                    <td>{{ transfer.criado_em|date:"d/m/Y H:i" }}</td>
+                    <td>
+                        <small class="text-muted d-block">Por: {{ transfer.criado_por.username }}</small>
+                        {% if transfer.recebido_por %}
+                        <small class="text-muted d-block">Rec: {{ transfer.recebido_por.username }}</small>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if transfer.status == 'RASCUNHO' %}
+                        <span class="badge bg-secondary">Rascunho</span>
+                        {% elif transfer.status == 'EXPEDIDA' %}
+                        <span class="badge bg-warning text-dark"><i class="bi bi-truck me-1"></i> Em Trânsito</span>
+                        {% elif transfer.status == 'RECEBIDA' %}
+                        <span class="badge bg-success">Recebida</span>
+                        {% elif transfer.status == 'RECEBIDA_COM_DIVERGENCIA' %}
+                        <span class="badge bg-info text-dark">Divergência</span>
+                        {% else %}
+                        <span class="badge bg-danger">Cancelada</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <a href="{% url 'transfer_detail' transfer.id %}" class="btn btn-sm btn-outline-primary rounded-3">
+                            <i class="bi bi-eye-fill"></i> Detalhar
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted border-0 py-4">Nenhuma transferência de estoque registrada.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

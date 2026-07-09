@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Vencimentos de C.A. - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'report_list' %}" class="text-primary text-decoration-none">Relatórios</a></li>
+<li class="breadcrumb-item active text-secondary" aria-current="page">Controle de C.A.</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Relatório de Validades de C.A.</h1>
+    <a href="{% url 'report_list' %}" class="btn btn-outline-secondary btn-premium">Voltar</a>
+</div>
+
+<div class="card-premium">
+    <div class="table-responsive">
+        <table class="table table-premium mb-0">
+            <thead>
+                <tr>
+                    <th class="text-muted border-0">Número do C.A.</th>
+                    <th class="text-muted border-0">Fabricante</th>
+                    <th class="text-muted border-0">Data de Validade</th>
+                    <th class="text-muted border-0 text-center">Situação MTE</th>
+                    <th class="text-muted border-0 text-center">Origem</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ca in cas %}
+                <tr>
+                    <td class="text-light fw-bold fs-5">{{ ca.numero_exibicao }}</td>
+                    <td>{{ ca.fabricante|default:"-" }}</td>
+                    <td>{{ ca.data_validade|date:"d/m/Y" }}</td>
+                    <td class="text-center">
+                        {% if ca.situacao == 'VÁLIDO' %}
+                        <span class="badge bg-success">Válido</span>
+                        {% else %}
+                        <span class="badge bg-danger">Vencido</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if ca.status_verificacao == 'VERIFICADO_BASE_OFICIAL' %}
+                        <span class="badge bg-success"><i class="bi bi-check-circle-fill"></i> Base Oficial</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle-fill"></i> Manual</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted border-0 py-4">Nenhum Certificado de Aprovação (C.A.) cadastrado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

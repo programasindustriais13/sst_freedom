@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Certificados de Aprovação - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'product_list' %}" class="text-primary text-decoration-none">Catálogo de EPIs</a></li>
+<li class="breadcrumb-item active text-secondary" aria-current="page">Certificados de Aprovação</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Certificados de Aprovação (C.A.)</h1>
+    <div class="d-flex gap-2">
+        <a href="{% url 'ca_create' %}" class="btn btn-premium btn-premium-primary">
+            <i class="bi bi-file-earmark-plus-fill me-2"></i> Novo C.A. Manual
+        </a>
+    </div>
+</div>
+
+<div class="card-premium">
+    <div class="table-responsive">
+        <table class="table table-premium mb-0">
+            <thead>
+                <tr>
+                    <th class="text-muted border-0">Certificado</th>
+                    <th class="text-muted border-0">Fabricante</th>
+                    <th class="text-muted border-0">Natureza da Proteção</th>
+                    <th class="text-muted border-0">Data Validade</th>
+                    <th class="text-muted border-0 text-center">Status MTE</th>
+                    <th class="text-muted border-0 text-center">Verificação</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ca in cas %}
+                <tr>
+                    <td class="text-light fw-bold">{{ ca.numero_exibicao }}</td>
+                    <td>{{ ca.fabricante|default:"-" }}</td>
+                    <td>
+                        <small class="text-muted text-truncate d-block" style="max-width: 250px;">{{ ca.natureza_protecao|default:"-" }}</small>
+                    </td>
+                    <td>{{ ca.data_validade|date:"d/m/Y" }}</td>
+                    <td class="text-center">
+                        {% if ca.situacao == 'VÁLIDO' %}
+                        <span class="badge bg-success">Válido</span>
+                        {% else %}
+                        <span class="badge bg-danger">Vencido</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if ca.status_verificacao == 'VERIFICADO_BASE_OFICIAL' %}
+                        <span class="badge bg-success" title="Sincronizado do CAEPI/MTE"><i class="bi bi-check-circle-fill"></i> Base Oficial</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark" title="{{ ca.justificativa_manual }}"><i class="bi bi-exclamation-triangle-fill"></i> Manual</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted border-0 py-4">Nenhum Certificado de Aprovação cadastrado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

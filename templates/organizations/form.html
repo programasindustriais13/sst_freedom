@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'organization_dashboard' %}" class="text-primary text-decoration-none">Estrutura Organizacional</a></li>
+<li class="breadcrumb-item active text-secondary" aria-current="page">{{ title }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+        <div class="card-premium card-primary">
+            <h3 class="mb-4">{{ title }}</h3>
+            
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                {% for field in form %}
+                <div class="mb-3">
+                    <label for="{{ field.id_for_label }}" class="form-label text-secondary fw-semibold">{{ field.label }}</label>
+                    {% if field.field.widget.input_type == 'checkbox' %}
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" name="{{ field.name }}" id="{{ field.id_for_label }}" {% if field.value %}checked{% endif %}>
+                        <label class="form-check-label text-muted" for="{{ field.id_for_label }}">{{ field.help_text|default:"Ativar este registro" }}</label>
+                    </div>
+                    {% else %}
+                    <!-- Render drop downs and inputs with custom styling -->
+                    <input type="{{ field.field.widget.input_type|default:'text' }}" name="{{ field.name }}" id="{{ field.id_for_label }}" class="form-control form-control-premium" value="{{ field.value|default:'' }}" {% if field.field.required %}required{% endif %}>
+                    {% if field.help_text %}
+                    <div class="form-text text-muted">{{ field.help_text }}</div>
+                    {% endif %}
+                    {% endif %}
+                    
+                    {% if field.errors %}
+                    <div class="invalid-feedback d-block">
+                        {{ field.errors|join:", " }}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+
+                <div class="d-flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-premium btn-premium-primary px-4">
+                        <i class="bi bi-check-lg me-2"></i> Salvar
+                    </button>
+                    <a href="{% url 'organization_dashboard' %}" class="btn btn-outline-secondary btn-premium px-4">
+                        Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

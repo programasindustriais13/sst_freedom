@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Colaboradores - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item active text-secondary" aria-current="page">Colaboradores</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Colaboradores</h1>
+    <a href="{% url 'employee_create' %}" class="btn btn-premium btn-premium-primary">
+        <i class="bi bi-person-plus-fill me-2"></i> Novo Colaborador
+    </a>
+</div>
+
+<!-- Filtros de Busca -->
+<div class="card-premium mb-4">
+    <form method="get" class="row g-3">
+        <div class="col-12 col-md-5">
+            <label for="search" class="form-label text-secondary fw-semibold">Busca rápida</label>
+            <div class="input-group">
+                <span class="input-group-text bg-transparent border-secondary border-end-0 text-secondary" style="border-radius: 12px 0 0 12px;">
+                    <i class="bi bi-search"></i>
+                </span>
+                <input type="text" name="search" id="search" class="form-control form-control-premium border-start-0" placeholder="Nome, matrícula ou CPF..." value="{{ search_val }}" style="border-radius: 0 12px 12px 0 !important;">
+            </div>
+        </div>
+
+        <div class="col-12 col-md-3">
+            <label for="unit" class="form-label text-secondary fw-semibold">Filial / Unidade</label>
+            <select name="unit" id="unit" class="form-select form-control-premium">
+                <option value="">Todas as Unidades</option>
+                {% for unit in units %}
+                <option value="{{ unit.id }}" {% if unit_val == unit.id|stringformat:"i" %}selected{% endif %}>{{ unit.codigo }} - {{ unit.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-12 col-md-2">
+            <label for="situacao" class="form-label text-secondary fw-semibold">Situação</label>
+            <select name="situacao" id="situacao" class="form-select form-control-premium">
+                <option value="">Todas</option>
+                <option value="ATIVO" {% if situacao_val == "ATIVO" %}selected{% endif %}>Ativo</option>
+                <option value="AFASTADO" {% if situacao_val == "AFASTADO" %}selected{% endif %}>Afastado</option>
+                <option value="DESLIGADO" {% if situacao_val == "DESLIGADO" %}selected{% endif %}>Desligado</option>
+            </select>
+        </div>
+
+        <div class="col-12 col-md-2 d-flex align-items-end">
+            <button type="submit" class="btn btn-premium btn-premium-primary w-100 py-2">
+                Filtrar
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Listagem -->
+<div class="card-premium">
+    <div class="table-responsive">
+        <table class="table table-premium mb-0">
+            <thead>
+                <tr>
+                    <th class="text-muted border-0">Colaborador</th>
+                    <th class="text-muted border-0">Matrícula</th>
+                    <th class="text-muted border-0">Unidade / Setor</th>
+                    <th class="text-muted border-0">Função</th>
+                    <th class="text-muted border-0 text-center">Status</th>
+                    <th class="text-muted border-0 text-center">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in employees %}
+                <tr>
+                    <td class="text-light fw-semibold">
+                        {{ emp.nome_completo }}
+                        <small class="text-muted d-block">CPF: {{ emp.cpf }}</small>
+                    </td>
+                    <td>{{ emp.matricula }}</td>
+                    <td>{{ emp.unit.codigo }} <small class="text-muted d-block">{{ emp.setor.nome }}</small></td>
+                    <td>{{ emp.funcao.nome }}</td>
+                    <td class="text-center">
+                        {% if emp.situacao == 'ATIVO' %}
+                        <span class="badge bg-success rounded-pill px-3">Ativo</span>
+                        {% elif emp.situacao == 'AFASTADO' %}
+                        <span class="badge bg-warning rounded-pill px-3">Afastado</span>
+                        {% else %}
+                        <span class="badge bg-danger rounded-pill px-3">Desligado</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <div class="d-flex justify-content-center gap-2">
+                            <a href="{% url 'employee_detail' emp.id %}" class="btn btn-sm btn-outline-primary rounded-3" title="Visualizar Ficha">
+                                <i class="bi bi-eye-fill"></i>
+                            </a>
+                            <a href="{% url 'employee_update' emp.id %}" class="btn btn-sm btn-outline-warning rounded-3" title="Editar">
+                                <i class="bi bi-pencil-fill"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted border-0 py-4">Nenhum colaborador encontrado com os filtros aplicados.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

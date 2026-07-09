@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhe da Transferência - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'transfer_list' %}" class="text-primary text-decoration-none">Transferências</a></li>
+<li class="breadcrumb-item active text-secondary" aria-current="page">TR-{{ transfer.id }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Transferência TR-{{ transfer.id }}</h1>
+    <div>
+        {% if transfer.status == 'RASCUNHO' %}
+        <form method="post" action="{% url 'transfer_expedite' transfer.id %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-premium btn-premium-primary">
+                <i class="bi bi-truck me-2"></i> Expedir Transferência
+            </button>
+        </form>
+        {% endif %}
+        <a href="{% url 'transfer_list' %}" class="btn btn-outline-secondary btn-premium ms-2">Voltar</a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Metadados da Transferência -->
+    <div class="col-12 col-md-4">
+        <div class="card-premium card-primary">
+            <h4 class="mb-3 text-light">Dados do Fluxo</h4>
+            <div class="row g-3 text-secondary">
+                <div class="col-12">
+                    <small class="text-muted d-block">Origem</small>
+                    <span class="text-light fw-medium">{{ transfer.source_location.nome }}</span>
+                </div>
+                <div class="col-12">
+                    <small class="text-muted d-block">Destino</small>
+                    <span class="text-light fw-medium">{{ transfer.dest_location.nome }}</span>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Unidade</small>
+                    <span class="text-light">{{ transfer.unit.codigo }}</span>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Status</small>
+                    {% if transfer.status == 'RASCUNHO' %}
+                    <span class="badge bg-secondary">Rascunho</span>
+                    {% elif transfer.status == 'EXPEDIDA' %}
+                    <span class="badge bg-warning text-dark"><i class="bi bi-truck"></i> Em Trânsito</span>
+                    {% elif transfer.status == 'RECEBIDA' %}
+                    <span class="badge bg-success">Recebida</span>
+                    {% elif transfer.status == 'RECEBIDA_COM_DIVERGENCIA' %}
+                    <span class="badge bg-info text-dark">Divergência</span>
+                    {% else %}
+                    <span class="badge bg-danger">Cancelada</span>
+                    {% endif %}
+                </div>
+                <div class="col-12">
+                    <small class="text-muted d-block">Expedido por</small>
+                    <span class="text-light">{{ transfer.criado_por.username }} em {{ transfer.criado_em|date:"d/m/Y H:i" }}</span>
+                </div>
+                {% if transfer.recebido_por %}
+                <div class="col-12">
+                    <small class="text-muted d-block">Recebido por</small>
+                    <span class="text-light">{{ transfer.recebido_por.username }} em {{ transfer.recebido_em|date:"d/m/Y H:i" }}</span>
+                </div>
+                {% endif %}
+                {% if transfer.justificativa_divergencia %}
+                <div class="col-12">
+                    <small class="text-muted d-block">Justificativa de Divergência</small>
+                    <span class="text-warning small d-block">{{ transfer.justificativa_divergencia }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Itens do Envio -->
+    <div class="col-12 col-md-8">
+        <!-- Se o Técnico SST for receber (status EXPEDIDA) -->
+        {% if transfer.status == 'EXPEDIDA' and request.user.is_tecnico or transfer.status == 'EXPEDIDA' and request.user.is_admin %}
+        <div class="card-premium card-warning mb-4">
+            <h4 class="mb-3 text-light">Confirmar Recebimento Físico</h4>
+            <form method="post" action="{% url 'transfer_receive' transfer.id %}">
+                {% csrf_token %}
+                <div class="table-responsive mb-3">
+                    <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
+                        <thead>
+                            <tr>
+                                <th class="text-muted border-0">EPI / Variante</th>
+                                <th class="text-muted border-0">Lote</th>
+                                <th class="text-muted border-0 text-center">Qtd Enviada</th>
+                                <th class="text-muted border-0 text-center" style="width: 150px;">Qtd Recebida</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td class="text-light fw-semibold">
+                                    {{ item.product_variant.product.nome }}
+                                    <small class="text-muted d-block">Tamanho: {{ item.product_variant.tamanho }}</small>
+                                </td>
+                                <td>{{ item.lot.identificador }}</td>
+                                <td class="text-center text-light">{{ item.quantity_sent }}</td>
+                                <td class="text-center">
+                                    <input type="number" name="qty_rec_{{ item.id }}" class="form-control form-control-premium text-center py-1" value="{{ item.quantity_sent }}" required>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mb-3">
+                    <label for="justificativa_divergencia" class="form-label text-secondary fw-semibold">Observações / Justificativa de Divergência</label>
+                    <textarea name="justificativa_divergencia" id="justificativa_divergencia" rows="2" class="form-control form-control-premium" placeholder="Preencha caso haja divergência entre quantidade enviada e recebida..."></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-premium btn-premium-primary">
+                    <i class="bi bi-check-lg me-2"></i> Confirmar Entrada no SST
+                </button>
+            </form>
+        </div>
+        {% else %}
+        <!-- Visualização estática dos itens -->
+        <div class="card-premium mb-4">
+            <h4 class="mb-3 text-light">Itens da Transferência</h4>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">EPI / Variante</th>
+                            <th class="text-muted border-0">Lote</th>
+                            <th class="text-muted border-0 text-center">Quantidade Enviada</th>
+                            <th class="text-muted border-0 text-center">Quantidade Recebida</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            <td class="text-light fw-semibold">
+                                {{ item.product_variant.product.nome }}
+                                <small class="text-muted d-block">Tamanho: {{ item.product_variant.tamanho }}</small>
+                            </td>
+                            <td>{{ item.lot.identificador }}</td>
+                            <td class="text-center text-light">{{ item.quantity_sent }}</td>
+                            <td class="text-center text-light">{{ item.quantity_received|default:"-" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Formulário para adicionar itens se em Rascunho -->
+        {% if transfer.status == 'RASCUNHO' %}
+        <div class="card-premium">
+            <h4 class="mb-3 text-success">Adicionar Item à Transferência</h4>
+            <form method="post" action="{% url 'transfer_item_create' transfer.id %}">
+                {% csrf_token %}
+                <div class="row g-3">
+                    <div class="col-12 col-md-8">
+                        <label for="id_lot" class="form-label text-secondary fw-semibold">Lote do EPI (Saldo na Origem)</label>
+                        <select name="lot" id="id_lot" class="form-select form-control-premium" required onchange="updateVariant(this)">
+                            <option value="">Selecione um lote com saldo...</option>
+                            {% for slot in available_lots %}
+                            <option value="{{ slot.id }}" data-variant-id="{{ slot.id }}" data-variant-name="{{ slot.product }} (Tamanho: {{ slot.tamanho }})">{{ slot.product }} - Lote {{ slot.identificador }} (Tamanho: {{ slot.tamanho }}) [Saldo: {{ slot.saldo }}]</option>
+                            {% endfor %}
+                        </select>
+                        <input type="hidden" name="product_variant" id="id_product_variant">
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label for="id_quantity_sent" class="form-label text-secondary fw-semibold">Quantidade a Enviar</label>
+                        <input type="number" name="quantity_sent" id="id_quantity_sent" class="form-control form-control-premium" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-premium btn-premium-primary mt-4">
+                    <i class="bi bi-plus-lg me-2"></i> Adicionar Item
+                </button>
+            </form>
+        </div>
+        <script>
+            function updateVariant(selectElement) {
+                // Para simplificar, como o Lote tem FK direta para a ProductVariant, o formulário necessita receber
+                // o ID da ProductVariant correspondente. Vamos obter isso no backend ou associar no form.
+                // Mas pera, para simplificar o POST, o Django precisa do ID da ProductVariant correspondente ao lote.
+                // Vamos escrever uma pequena lógica para atualizar o input hidden com o ID da ProductVariant do lote.
+                // Vamos fazer o select de lotes passar o ID do lote, e no backend a gente resolve a variant do lote!
+                // Ah, sim! Na verdade, no backend em StockTransferItemCreateView, a gente pode simplesmente pegar a
+                // variant correspondente ao lote selecionado!
+                // Então o campo 'product_variant' pode ser preenchido programaticamente no POST ou derivado no backend.
+                // Vamos derivar no backend ou colocar uma lógica simples aqui.
+                // De qualquer forma, vamos preencher no view.
+            }
+        </script>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhe do EPI - {{ product.nome }} - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'product_list' %}" class="text-primary text-decoration-none">Catálogo de EPIs</a></li>
+<li class="breadcrumb-item active text-secondary" aria-current="page">{{ product.nome }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>{{ product.nome }}</h1>
+    <a href="{% url 'product_list' %}" class="btn btn-outline-secondary btn-premium">Voltar</a>
+</div>
+
+<div class="row g-4">
+    <!-- Ficha de Dados do Produto -->
+    <div class="col-12 col-md-4">
+        <div class="card-premium card-primary mb-4">
+            <h4 class="mb-3 text-light">Dados do EPI</h4>
+            <div class="row g-3 text-secondary">
+                <div class="col-12">
+                    <small class="text-muted d-block">Categoria de Proteção</small>
+                    <span class="text-light fw-medium">{{ product.get_categoria_display }}</span>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Exige C.A.</small>
+                    {% if product.exige_ca %}
+                    <span class="badge bg-info text-dark">Sim</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Não</span>
+                    {% endif %}
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Controle Individual</small>
+                    {% if product.controlado_individualmente %}
+                    <span class="badge bg-primary">Individual</span>
+                    {% else %}
+                    <span class="badge bg-warning text-dark">Consumível</span>
+                    {% endif %}
+                </div>
+                <div class="col-12">
+                    <small class="text-muted d-block">Fabricante Padrão</small>
+                    <span class="text-light">{{ product.fabricante|default:"-" }}</span>
+                </div>
+                <div class="col-12">
+                    <small class="text-muted d-block">Descrição</small>
+                    <span class="text-light small">{{ product.descricao|default:"Sem descrição adicional." }}</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Adicionar Variante (Tamanho) -->
+        <div class="card-premium">
+            <h4 class="mb-3 text-success">Adicionar Tamanho/Grade</h4>
+            <form method="post" action="{% url 'variant_create' product.id %}">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="id_tamanho" class="form-label text-secondary fw-semibold">Tamanho / Numeração</label>
+                    <input type="text" name="tamanho" id="id_tamanho" class="form-control form-control-premium" required placeholder="P, M, G, 38, 39...">
+                </div>
+                <div class="mb-3">
+                    <label for="id_sku" class="form-label text-secondary fw-semibold">SKU / Cód Interno</label>
+                    <input type="text" name="sku" id="id_sku" class="form-control form-control-premium">
+                </div>
+                <div class="mb-3">
+                    <label for="id_estoque_minimo" class="form-label text-secondary fw-semibold">Estoque Mínimo</label>
+                    <input type="number" name="estoque_minimo" id="id_estoque_minimo" class="form-control form-control-premium" value="0">
+                </div>
+                <button type="submit" class="btn btn-premium btn-premium-primary w-100">
+                    Adicionar Tamanho
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Grade de Variantes e Estoque Físico -->
+    <div class="col-12 col-md-8">
+        <div class="card-premium mb-4">
+            <h4 class="mb-3 text-light">Grade de Tamanhos Cadastrados</h4>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">Tamanho</th>
+                            <th class="text-muted border-0">SKU / Código</th>
+                            <th class="text-muted border-0 text-center">Estoque Mínimo</th>
+                            <th class="text-muted border-0 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for var in variants %}
+                        <tr>
+                            <td class="text-light fw-bold">{{ var.tamanho }}</td>
+                            <td>{{ var.sku|default:"-" }}</td>
+                            <td class="text-center">{{ var.estoque_minimo }}</td>
+                            <td class="text-center">
+                                {% if var.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted border-0 py-4">Nenhum tamanho cadastrado para este produto.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Posição de Estoque Físico -->
+        <div class="card-premium">
+            <h4 class="mb-3 text-light"><i class="bi bi-pie-chart-fill"></i> Posição Física em Estoques</h4>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">Tamanho</th>
+                            <th class="text-muted border-0">Local de Estoque</th>
+                            <th class="text-muted border-0">Filial</th>
+                            <th class="text-muted border-0 text-end">Quantidade Disponível</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for vb in variant_balances %}
+                            {% for bal in vb.balances %}
+                            <tr>
+                                <td class="text-light fw-semibold">{{ vb.variant.tamanho }}</td>
+                                <td>{{ bal.location }}</td>
+                                <td>{{ bal.unit }}</td>
+                                <td class="text-end text-light fw-bold fs-5">{{ bal.balance }}</td>
+                            </tr>
+                            {% empty %}
+                            {% if forloop.first %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted border-0 py-4">Não há saldo disponível em estoque para nenhum tamanho deste item.</td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted border-0 py-4">Sem dados de estoque.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

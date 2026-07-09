@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Entregas de EPI - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item active text-secondary" aria-current="page">Fichas de Entrega</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Fichas Individuais / Entregas de EPI</h1>
+    <a href="{% url 'delivery_create' %}" class="btn btn-premium btn-premium-primary">
+        <i class="bi bi-shield-fill-check me-2"></i> Nova Entrega de EPI
+    </a>
+</div>
+
+<div class="card-premium animate-fade-in">
+    <div class="table-responsive">
+        <table class="table table-premium mb-0">
+            <thead>
+                <tr>
+                    <th class="text-muted border-0">Colaborador</th>
+                    <th class="text-muted border-0">EPI / Variante</th>
+                    <th class="text-muted border-0">C.A. / Lote</th>
+                    <th class="text-muted border-0 text-center">Quantidade</th>
+                    <th class="text-muted border-0">Data Entrega</th>
+                    <th class="text-muted border-0">Próxima Troca</th>
+                    <th class="text-muted border-0 text-center">Assinatura</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for del in deliveries %}
+                <tr>
+                    <td class="text-light fw-semibold">
+                        {{ del.employee.nome_completo }}
+                        <small class="text-muted d-block">Matrícula: {{ del.employee.matricula }}</small>
+                    </td>
+                    <td class="text-light fw-semibold">
+                        {{ del.product_variant.product.nome }}
+                        <small class="text-muted d-block">Tamanho: {{ del.product_variant.tamanho }}</small>
+                    </td>
+                    <td>
+                        {{ del.ca_entregue.numero_exibicao|default:"CA N/A" }}
+                        <small class="text-muted d-block">Lote: {{ del.lot.identificador }}</small>
+                    </td>
+                    <td class="text-center text-light">{{ del.quantidade }}</td>
+                    <td>{{ del.data_entrega|date:"d/m/Y" }}</td>
+                    <td>{{ del.data_prevista_troca|date:"d/m/Y" }}</td>
+                    <td class="text-center">
+                        {% if del.status_assinatura == 'ASSINADO' %}
+                        <span class="badge bg-success" title="Ciência confirmada por {{ del.nome_trabalhador_confirmacao }}"><i class="bi bi-check-lg"></i> Assinado</span>
+                        {% else %}
+                        <a href="{% url 'delivery_sign' del.id %}" class="btn btn-sm btn-warning py-1 px-3 text-dark rounded-3 fw-bold">
+                            <i class="bi bi-clock"></i> Pendente
+                        </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted border-0 py-4">Nenhuma entrega registrada.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
