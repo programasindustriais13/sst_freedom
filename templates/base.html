@@ -8,7 +8,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    <!-- Custom Theme Stylesheet -->
+    <!-- Tema Institucional Pneus Freedom — SPEC-2026-003 -->
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/custom.css' %}">
     {% block extra_head %}{% endblock %}
@@ -17,15 +17,20 @@
 
     <!-- Sidebar Wrapper -->
     <div class="sidebar-wrapper" id="sidebar">
-        <div class="sidebar-logo">
-            <i class="bi bi-shield-check-fill"></i> SST Freedom
-        </div>
-        
+        <!-- Logo da Empresa -->
+        <a href="{% url 'dashboard' %}" title="Ir para o painel principal">
+            <img
+                src="{% static 'images/logo_freedom.png' %}"
+                alt="Logo Pneus Freedom"
+                class="sidebar-logo-img"
+            >
+        </a>
+
         <nav class="nav flex-column">
             <a class="nav-link-premium {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">
                 <i class="bi bi-grid-1x2-fill"></i> Início
             </a>
-            
+
             {% if request.user.is_tecnico or request.user.is_admin %}
             <a class="nav-link-premium {% if 'employees' in request.path %}active{% endif %}" href="{% url 'employee_list' %}">
                 <i class="bi bi-people-fill"></i> Colaboradores
@@ -34,13 +39,13 @@
                 <i class="bi bi-shield-shaded"></i> EPIs / Catálogo
             </a>
             {% endif %}
-            
+
             {% if request.user.is_almoxarife or request.user.is_admin %}
             <a class="nav-link-premium {% if 'inventory/nfs' in request.path or 'inventory/suppliers' in request.path %}active{% endif %}" href="{% url 'fiscal_note_list' %}">
                 <i class="bi bi-box-seam-fill"></i> Almoxarifado / Compras
             </a>
             {% endif %}
-            
+
             <a class="nav-link-premium {% if 'inventory/transfers' in request.path %}active{% endif %}" href="{% url 'transfer_list' %}">
                 <i class="bi bi-arrow-left-right"></i> Transferências
             </a>
@@ -50,14 +55,14 @@
                 <i class="bi bi-journal-check"></i> Entregas / Ficha EPI
             </a>
             {% endif %}
-            
+
             <a class="nav-link-premium {% if 'alerts' in request.path %}active{% endif %}" href="{% url 'alert_list' %}">
                 <i class="bi bi-bell-fill"></i> Alertas
                 {% if active_alerts_count %}
                 <span class="badge bg-danger rounded-pill ms-auto">{{ active_alerts_count }}</span>
                 {% endif %}
             </a>
-            
+
             <a class="nav-link-premium {% if 'reports' in request.path %}active{% endif %}" href="{% url 'report_list' %}">
                 <i class="bi bi-file-earmark-bar-graph-fill"></i> Relatórios
             </a>
@@ -66,12 +71,13 @@
                 <i class="bi bi-building"></i> Cadastros / Unidades
             </a>
 
-            <div class="mt-5 border-top border-secondary pt-3">
+            <!-- Usuário autenticado e logout -->
+            <div class="mt-5 border-top pt-3" style="border-color: var(--border-default) !important;">
                 <div class="d-flex align-items-center gap-2 mb-3">
-                    <i class="bi bi-person-circle fs-4 text-primary"></i>
+                    <i class="bi bi-person-circle fs-4" style="color: var(--brand-primary);"></i>
                     <div>
-                        <div class="fw-semibold text-truncate" style="max-width: 150px;">{{ request.user.get_full_name|default:request.user.username }}</div>
-                        <small class="text-muted d-block">{{ request.user.get_profile_type_display }}</small>
+                        <div class="fw-semibold text-truncate" style="max-width: 150px; color: var(--text-primary);">{{ request.user.get_full_name|default:request.user.username }}</div>
+                        <small style="color: var(--text-muted);">{{ request.user.get_profile_type_display }}</small>
                     </div>
                 </div>
                 <a class="btn btn-outline-danger w-100 btn-sm rounded-3" href="{% url 'logout' %}">
@@ -83,52 +89,52 @@
 
     <!-- Main Content Area -->
     <div class="main-content">
-        <!-- Top Navbar (Mobile toggle and context info) -->
-        <header class="d-flex justify-content-between align-items-center mb-4 border-bottom border-secondary pb-3">
+        <!-- Top Navbar (Mobile toggle e breadcrumb) -->
+        <header class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
             <div class="d-flex align-items-center gap-3">
-                <button class="btn btn-outline-light d-lg-none" type="button" onclick="toggleSidebar()">
+                <button class="btn btn-outline-light d-lg-none" type="button" onclick="toggleSidebar()" aria-label="Abrir menu de navegação">
                     <i class="bi bi-list"></i>
                 </button>
                 <div class="d-none d-sm-block">
                     <nav aria-label="breadcrumb">
                         <ol class="breadcrumb mb-0">
-                            <li class="breadcrumb-item"><a href="{% url 'dashboard' %}" class="text-primary text-decoration-none">SST Freedom</a></li>
+                            <li class="breadcrumb-item"><a href="{% url 'dashboard' %}" class="text-decoration-none" style="color: var(--brand-primary);">SST Freedom</a></li>
                             {% block breadcrumbs %}{% endblock %}
                         </ol>
                     </nav>
                 </div>
             </div>
-            
+
             <div class="d-flex align-items-center gap-3">
                 {% if request.user.units.all %}
                 <span class="badge bg-secondary p-2 rounded-3">
-                    <i class="bi bi-geo-alt-fill text-primary"></i>
+                    <i class="bi bi-geo-alt-fill me-1" style="color: var(--brand-primary);"></i>
                     {% for unit in request.user.units.all %}
                         {{ unit.codigo }}{% if not forloop.last %}, {% endif %}
                     {% endfor %}
                 </span>
                 {% else %}
-                <span class="badge bg-warning p-2 rounded-3 text-dark">
-                    <i class="bi bi-exclamation-triangle-fill"></i> Sem Unidade Vinculada
+                <span class="badge p-2 rounded-3" style="background-color: var(--status-warning-glow); color: var(--status-warning); border: 1px solid rgba(240,165,0,0.3);">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i> Sem Unidade
                 </span>
                 {% endif %}
             </div>
         </header>
 
-        <!-- Messages Notification System -->
+        <!-- Mensagens do Django -->
         {% if messages %}
         <div class="messages-container mb-4">
             {% for message in messages %}
-            <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show rounded-4" role="alert">
-                <i class="bi {% if message.tags == 'success' %}bi-check-circle-fill{% elif message.tags == 'warning' %}bi-exclamation-triangle-fill{% else %}bi-exclamation-circle-fill{% endif %} me-2"></i>
-                {{ message }}
-                <button type="button" class="btn-close" data-稳定-dismiss="alert" data-bs-dismiss="alert" aria-label="Close"></button>
+            <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show rounded-4 d-flex align-items-center gap-2" role="alert">
+                <i class="bi {% if message.tags == 'success' %}bi-check-circle-fill{% elif message.tags == 'warning' %}bi-exclamation-triangle-fill{% elif message.tags == 'error' %}bi-x-circle-fill{% else %}bi-info-circle-fill{% endif %} flex-shrink-0"></i>
+                <span>{{ message }}</span>
+                <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Fechar"></button>
             </div>
             {% endfor %}
         </div>
         {% endif %}
 
-        <!-- Custom Content -->
+        <!-- Conteúdo personalizado -->
         <main class="animate-fade-in">
             {% block content %}{% endblock %}
         </main>
@@ -141,6 +147,15 @@
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.toggle('show');
         }
+
+        // Fechar sidebar ao clicar fora (mobile)
+        document.addEventListener('click', function(e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggleBtn = e.target.closest('[onclick="toggleSidebar()"]');
+            if (!sidebar.contains(e.target) && !toggleBtn && sidebar.classList.contains('show')) {
+                sidebar.classList.remove('show');
+            }
+        });
     </script>
     {% block extra_js %}{% endblock %}
 </body>

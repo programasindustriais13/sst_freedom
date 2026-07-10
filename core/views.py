@@ -4,6 +4,7 @@ from django.views.generic import TemplateView, ListView
 from django.db import models
 from django.utils import timezone
 from inventory.models import StockMovement, StockTransfer, InventoryLocation
+from inventory.services import get_stock_balance
 from notifications.models import Alert
 from ppe.models import ProductVariant, PPEDelivery, CertificadoAprovacao
 

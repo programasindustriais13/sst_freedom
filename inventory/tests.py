@@ -221,3 +221,153 @@ class FiscalNoteAndAuditTestCase(TestCase):
         self.client.post('/accounts/login/', {'username': 'usuario_inexistente', 'password': 'senha_errada'})
         logs = AuditLog.objects.filter(action__icontains="Tentativa de login falha")
         self.assertTrue(logs.exists())
+
+
+class UnifiedFiscalNoteTestCase(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(razao_social="Indústria Teste LTDA", nome_fantasia="Indústria Teste", cnpj="12345678000199")
+        self.unit = Unit.objects.create(company=self.company, codigo="UN-TEST", nome="Unidade Teste", cidade="Natal", estado="RN")
+        self.cc = CostCenter.objects.create(company=self.company, codigo="CC-01", nome="Centro de Custo 1")
+        self.loc_almox = InventoryLocation.objects.create(unit=self.unit, codigo="ALM-01", nome="Almoxarifado Geral", tipo="ALMOXARIFADO")
+        self.user = User.objects.create_user(username="almoxarife3", password="pwd", profile_type="ALMOXARIFE")
+        self.supplier = Supplier.objects.create(razao_social="Fornecedor de EPIs LTDA", cnpj_cpf="98765432100019")
+        
+        # Cria um produto EPI
+        self.epi = Product.objects.create(
+            nome="Luva de Teste", 
+            tipo_produto="EPI", 
+            categoria="PROTECAO_MEMBROS_SUP", 
+            ca_numero="CA-12345",
+            exige_ca=True
+        )
+        
+        # Cria um produto não-EPI
+        self.non_epi = Product.objects.create(
+            nome="Uniforme de Teste", 
+            tipo_produto="UNIFORME", 
+            categoria="VESTUARIO",
+            exige_ca=False
+        )
+
+    def test_create_and_confirm_fiscal_note_success(self):
+        from .services import create_and_confirm_fiscal_note
+        
+        note = FiscalNote(
+            supplier=self.supplier,
+            unit=self.unit,
+            tipo="NOTA_FISCAL",
+            numero="555666",
+            serie="1",
+            data_emissao=timezone.now().date(),
+            data_recebimento=timezone.now().date(),
+            centro_custo=self.cc,
+            valor_total=250.0,
+            usuario=self.user,
+            status="RASCUNHO"
+        )
+        
+        items_data = [
+            {
+                'product_id': self.epi.id,
+                'tamanho': 'G',
+                'ca_numero': 'CA-12345',
+                'identificador': 'LOT-A',
+                'data_fabricacao': '',
+                'data_validade': str(timezone.now().date() + timezone.timedelta(days=365)),
+                'quantidade': 10,
+                'custo_unitario': 25.0
+            }
+        ]
+        
+        # Executa service
+        create_and_confirm_fiscal_note(note, items_data, self.user)
+        
+        note.refresh_from_db()
+        self.assertEqual(note.status, "CONFERIDA")
+        self.assertEqual(note.lots.count(), 1)
+        
+        lot = note.lots.first()
+        self.assertEqual(lot.identificador, "LOT-A")
+        self.assertEqual(lot.product_variant.tamanho, "G")
+        self.assertEqual(lot.product_variant.product, self.epi)
+        
+        # Verifica se o estoque foi atualizado no Almoxarifado
+        balance = get_stock_balance(self.loc_almox, lot.product_variant, lot)
+        self.assertEqual(balance, 10)
+
+    def test_create_and_confirm_fiscal_note_rollback(self):
+        from .services import create_and_confirm_fiscal_note
+        
+        note = FiscalNote(
+            supplier=self.supplier,
+            unit=self.unit,
+            tipo="NOTA_FISCAL",
+            numero="777888",
+            serie="1",
+            data_emissao=timezone.now().date(),
+            data_recebimento=timezone.now().date(),
+            centro_custo=self.cc,
+            valor_total=250.0,
+            usuario=self.user,
+            status="RASCUNHO"
+        )
+        
+        # Quantidade inválida (negativa) para forçar falha no item
+        items_data = [
+            {
+                'product_id': self.epi.id,
+                'tamanho': 'G',
+                'ca_numero': 'CA-12345',
+                'identificador': 'LOT-A',
+                'data_fabricacao': '',
+                'data_validade': str(timezone.now().date() + timezone.timedelta(days=365)),
+                'quantidade': -5,
+                'custo_unitario': 25.0
+            }
+        ]
+        
+        # Garante que lança ValidationError
+        with self.assertRaises(ValidationError):
+            create_and_confirm_fiscal_note(note, items_data, self.user)
+            
+        # Garante que a Nota Fiscal não foi criada nem persistida no banco
+        self.assertFalse(FiscalNote.objects.filter(numero="777888").exists())
+
+    def test_tipo_produto_conditional_ca(self):
+        # Valida que produtos não-EPI não exigem C.A. no form clean
+        from ppe.forms import ProductForm
+        
+        # Caso 1: EPI com C.A. preenchido
+        form_epi = ProductForm(data={
+            'nome': 'Bota EPI Nova',
+            'tipo_produto': 'EPI',
+            'categoria': 'PROTECAO_MEMBROS_INF',
+            'ca_numero': '12345',
+            'descricao': 'Bota de teste',
+            'unidade_medida': 'PAR',
+            'fabricante': 'Marluvas',
+            'exige_ca': True,
+            'controlado_individualmente': True,
+            'ativo': True
+        })
+        self.assertTrue(form_epi.is_valid())
+        
+        # Caso 2: Não-EPI (Uniforme) com C.A. preenchido
+        form_uniform = ProductForm(data={
+            'nome': 'Camiseta Uniforme',
+            'tipo_produto': 'UNIFORME',
+            'categoria': 'VESTUARIO',
+            'ca_numero': '12345',  # Deve ser ignorado e limpo pelo form
+            'descricao': 'Camiseta de algodão',
+            'unidade_medida': 'UND',
+            'fabricante': 'Texpris',
+            'exige_ca': True,
+            'controlado_individualmente': True,
+            'ativo': True
+        })
+        self.assertTrue(form_uniform.is_valid())
+        product = form_uniform.save(commit=False)
+        self.assertEqual(product.ca_numero, None)
+        self.assertEqual(product.categoria, 'OUTRO')
+        self.assertEqual(product.exige_ca, False)
+

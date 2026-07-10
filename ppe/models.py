@@ -4,6 +4,15 @@ from organizations.models import Unit, Sector, CostCenter, Function
 from employees.models import Employee
 
 class Product(models.Model):
+    TIPO_PRODUTO_CHOICES = (
+        ('EPI', 'EPI'),
+        ('MATERIAL_SEGURANCA', 'Material de Segurança'),
+        ('MATERIAL_CONSUMO', 'Material de Consumo'),
+        ('FERRAMENTA', 'Ferramenta'),
+        ('UNIFORME', 'Uniforme'),
+        ('OUTRO', 'Outro'),
+    )
+
     CATEGORIA_CHOICES = (
         ('PROTECAO_CABECA', 'Proteção da Cabeça'),
         ('PROTECAO_AUDITIVA', 'Proteção Auditiva'),
@@ -16,8 +25,10 @@ class Product(models.Model):
         ('OUTRO', 'Outro'),
     )
 
-    nome = models.CharField(max_length=255, verbose_name="Nome do EPI")
-    categoria = models.CharField(max_length=50, choices=CATEGORIA_CHOICES, verbose_name="Categoria de Proteção")
+    nome = models.CharField(max_length=255, verbose_name="Nome do Produto")
+    tipo_produto = models.CharField(max_length=50, choices=TIPO_PRODUTO_CHOICES, default='EPI', verbose_name="Tipo de Produto")
+    categoria = models.CharField(max_length=50, choices=CATEGORIA_CHOICES, blank=True, null=True, default='OUTRO', verbose_name="Categoria de Proteção")
+    ca_numero = models.CharField(max_length=50, blank=True, null=True, verbose_name="C.A. (Certificado de Aprovação)")
     descricao = models.TextField(blank=True, null=True, verbose_name="Descrição")
     unidade_medida = models.CharField(max_length=20, default="UND", verbose_name="Unidade de Medida")
     fabricante = models.CharField(max_length=255, blank=True, null=True, verbose_name="Fabricante Padrão")

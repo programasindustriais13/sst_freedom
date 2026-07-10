@@ -10,15 +10,30 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>{{ product.nome }}</h1>
-    <a href="{% url 'product_list' %}" class="btn btn-outline-secondary btn-premium">Voltar</a>
+    <div class="d-flex gap-2">
+        <a href="{% url 'product_update' product.id %}" class="btn btn-premium btn-premium-primary">
+            <i class="bi bi-pencil-fill"></i> Editar Produto
+        </a>
+        <a href="{% url 'product_list' %}" class="btn btn-outline-secondary btn-premium">Voltar</a>
+    </div>
 </div>
 
 <div class="row g-4">
     <!-- Ficha de Dados do Produto -->
     <div class="col-12 col-md-4">
         <div class="card-premium card-primary mb-4">
-            <h4 class="mb-3 text-light">Dados do EPI</h4>
+            <h4 class="mb-3 text-light">Dados do Produto</h4>
             <div class="row g-3 text-secondary">
+                <div class="col-12">
+                    <small class="text-muted d-block">Classificação</small>
+                    <span class="text-light fw-medium">{{ product.get_tipo_produto_display }}</span>
+                </div>
+                {% if product.tipo_produto == 'EPI' %}
+                <div class="col-12">
+                    <small class="text-muted d-block">C.A. (Certificado de Aprovação)</small>
+                    <span class="text-light fw-bold">{{ product.ca_numero|default:"Não informado" }}</span>
+                </div>
+                {% endif %}
                 <div class="col-12">
                     <small class="text-muted d-block">Categoria de Proteção</small>
                     <span class="text-light fw-medium">{{ product.get_categoria_display }}</span>

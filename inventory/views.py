@@ -48,12 +48,53 @@ class FiscalNoteCreateView(LoginRequiredMixin, CreateView):
             form.fields['unit'].queryset = user.units.all()
         return form
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from ppe.models import Product
+        context['products'] = Product.objects.filter(ativo=True).order_by('nome')
+        return context
+
     def form_valid(self, form):
-        form.instance.usuario = self.request.user
-        form.instance.status = 'RASCUNHO'
-        response = super().form_valid(form)
-        messages.success(self.request, "Documento de entrada criado em Rascunho. Adicione os itens correspondentes.")
-        return response
+        import json
+        from django.db import transaction
+        from .services import create_and_confirm_fiscal_note
+        
+        items_json = self.request.POST.get('items_json', '[]')
+        try:
+            items_data = json.loads(items_json)
+        except ValueError:
+            form.add_error(None, "JSON de itens inválido.")
+            return self.form_invalid(form)
+        
+        if not items_data:
+            form.add_error(None, "Você deve adicionar pelo menos um produto válido.")
+            return self.form_invalid(form)
+        
+        try:
+            with transaction.atomic():
+                fiscal_note = form.save(commit=False)
+                create_and_confirm_fiscal_note(fiscal_note, items_data, self.request.user)
+                
+                # Grava auditoria
+                from audit.models import log_audit
+                log_audit(
+                    request=self.request,
+                    action=f"Criação e Confirmação de Nota Fiscal: {fiscal_note.numero or 'S/N'} (Tipo: {fiscal_note.get_tipo_display()})",
+                    model_name="FiscalNote",
+                    object_id=fiscal_note.id,
+                    before=None,
+                    after={'status': 'CONFERIDA', 'valor_total': float(fiscal_note.valor_total), 'itens': len(items_data)}
+                )
+                
+            messages.success(self.request, "Recebimento cadastrado e estoque atualizado no Almoxarifado com sucesso!")
+            self.object = fiscal_note
+            return redirect(self.get_success_url())
+        except ValidationError as e:
+            form.add_error(None, e.message if hasattr(e, 'message') else str(e))
+            return self.form_invalid(form)
+        except Exception as e:
+            form.add_error(None, f"Erro ao processar recebimento: {str(e)}")
+            return self.form_invalid(form)
 
     def get_success_url(self):
         return reverse('fiscal_note_detail', kwargs={'pk': self.object.pk})

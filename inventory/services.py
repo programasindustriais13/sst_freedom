@@ -174,3 +174,110 @@ def receive_transfer(transfer, user, item_recepcoes, justificativa=None):
                 correlation_id=f"TR-{transfer.id}",
                 notes=f"Recebimento de transferência física originada em {transfer.source_location.nome}."
             )
+
+
+@transaction.atomic
+def create_and_confirm_fiscal_note(fiscal_note, items_data, user):
+    """
+    Salva a Nota Fiscal diretamente com status 'CONFERIDA', cria os respectivos
+    Lotes e gera as movimentações físicas de entrada no Almoxarifado central de forma atômica.
+    """
+    import decimal
+    from ppe.models import Product, ProductVariant, CertificadoAprovacao
+
+    if not items_data:
+        raise ValidationError("Não é possível salvar um documento de recebimento sem itens.")
+
+    # Valida e busca Local de Estoque Almoxarifado ativo
+    loc_almox = InventoryLocation.objects.filter(unit=fiscal_note.unit, tipo='ALMOXARIFADO', ativo=True).first()
+    if not loc_almox:
+        raise ValidationError(f"A unidade {fiscal_note.unit.nome} não possui um Local de Estoque do tipo ALMOXARIFADO ativo.")
+
+    # Configura metadados da Nota Fiscal
+    fiscal_note.status = 'CONFERIDA'
+    fiscal_note.usuario = user
+    fiscal_note.save()
+
+    total_calculated = decimal.Decimal('0.00')
+
+    # Criação dos itens / lotes e movimentações
+    for item in items_data:
+        product_id = item.get('product_id')
+        tamanho = item.get('tamanho', 'U').strip() or 'U'
+        ca_numero = item.get('ca_numero', '').strip()
+        identificador = item.get('identificador', '').strip()
+        data_fabricacao = item.get('data_fabricacao') or None
+        data_validade = item.get('data_validade')
+        quantidade = int(item.get('quantidade', 0))
+        custo_unitario = decimal.Decimal(str(item.get('custo_unitario', 0.0)))
+
+        if quantidade <= 0:
+            raise ValidationError("A quantidade dos itens deve ser maior que zero.")
+        if custo_unitario < 0:
+            raise ValidationError("O custo unitário não pode ser negativo.")
+        if not data_validade:
+            raise ValidationError("A data de validade é obrigatória.")
+        if not identificador:
+            raise ValidationError("O lote do fabricante é obrigatório.")
+
+        try:
+            product = Product.objects.get(id=product_id)
+        except Product.DoesNotExist:
+            raise ValidationError(f"Produto com ID {product_id} não existe.")
+
+        # Encontra ou cria a variante correspondente ao tamanho
+        variant, _ = ProductVariant.objects.get_or_create(
+            product=product,
+            tamanho=tamanho,
+            defaults={'ativo': True, 'estoque_minimo': 0}
+        )
+
+        # Encontra ou cria o CertificadoAprovacao se for EPI e possuir C.A.
+        ca_obj = None
+        if product.tipo_produto == 'EPI' and ca_numero:
+            num_norm = "".join([c for c in ca_numero if c.isdigit()])
+            if num_norm:
+                ca_obj, _ = CertificadoAprovacao.objects.get_or_create(
+                    numero=num_norm,
+                    defaults={
+                        'numero_exibicao': ca_numero,
+                        'fabricante': product.fabricante or 'Informado via NF',
+                        'data_validade': timezone.now().date() + timezone.timedelta(days=365*2), # 2 anos padrão
+                        'status_verificacao': 'INFORMADO_MANUALMENTE',
+                        'justificativa_manual': 'Criado via recebimento de NF.'
+                    }
+                )
+
+        # Cria o lote
+        lot = Lot.objects.create(
+            product_variant=variant,
+            fiscal_note=fiscal_note,
+            ca=ca_obj,
+            identificador=identificador,
+            data_fabricacao=data_fabricacao,
+            data_validade=data_validade,
+            quantidade_inicial=quantidade,
+            custo_unitario=custo_unitario
+        )
+
+        # Incrementa o total calculado
+        total_calculated += (quantidade * custo_unitario)
+
+        # Cria a movimentação de estoque
+        StockMovement.objects.create(
+            unit=fiscal_note.unit,
+            location=loc_almox,
+            product_variant=variant,
+            lot=lot,
+            quantity=quantidade,
+            cost_unit=custo_unitario,
+            movement_type='ENTRADA_COMPRA',
+            user=user,
+            correlation_id=f"NF-{fiscal_note.id}",
+            notes=f"Entrada automática pela confirmação da Nota Fiscal {fiscal_note.numero}."
+        )
+
+    # Validação de divergência de valores conforme regra existente
+    if total_calculated != fiscal_note.valor_total:
+        if not fiscal_note.observacoes or not fiscal_note.observacoes.strip():
+            raise ValidationError("Existe divergência entre o valor total informado e o calculado. Por favor, insira uma justificativa no campo 'Observações'.")

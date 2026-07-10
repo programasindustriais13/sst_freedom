@@ -3,13 +3,19 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView, DetailView, CreateView, UpdateView
 from django.urls import reverse
 from django.core.exceptions import ValidationError
+from django.db import transaction, models
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+import json
 from django.contrib import messages
 from django.utils import timezone
 from organizations.models import Unit, InventoryLocation
 from inventory.models import Lot, StockMovement
 from inventory.services import get_stock_balance
+from employees.models import Employee
 from .models import Product, ProductVariant, CertificadoAprovacao, PPEMatrix, PPEDelivery, ExtraordinaryPPE
 from .services import deliver_ppe, confirm_delivery_signature, return_ppe, write_off_ppe
+from .forms import ProductForm
 
 class ProductListView(LoginRequiredMixin, ListView):
     model = Product
@@ -19,13 +25,25 @@ class ProductListView(LoginRequiredMixin, ListView):
 
 class ProductCreateView(LoginRequiredMixin, CreateView):
     model = Product
-    fields = ['nome', 'categoria', 'descricao', 'unidade_medida', 'fabricante', 'exige_ca', 'controlado_individualmente', 'ativo']
+    form_class = ProductForm
     template_name = "organizations/form.html"
     success_url = "/ppe/"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['title'] = "Novo Produto / EPI"
+        return context
+
+
+class ProductUpdateView(LoginRequiredMixin, UpdateView):
+    model = Product
+    form_class = ProductForm
+    template_name = "organizations/form.html"
+    success_url = "/ppe/"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['title'] = f"Editar Produto: {self.object.nome}"
         return context
 
 
@@ -245,3 +263,116 @@ def delivery_sign_view(request, pk):
             messages.error(request, f"Erro ao assinar: {str(e)}")
             
     return render(request, "ppe/delivery_sign.html", {'delivery': delivery})
+
+
+@require_http_methods(["GET"])
+def product_search_ajax(request):
+    q = request.GET.get('q', '').strip()
+    if not q:
+        return JsonResponse({'items': []})
+    
+    # Busca por nome (insensitivo) ou CA
+    products = Product.objects.filter(ativo=True)
+    products = products.filter(
+        models.Q(nome__icontains=q) | 
+        models.Q(ca_numero__icontains=q)
+    )
+    
+    items = []
+    for p in products[:10]:
+        items.append({
+            'id': p.id,
+            'nome': p.nome,
+            'tipo_produto': p.tipo_produto,
+            'ca_numero': p.ca_numero or '',
+            'unidade_medida': p.unidade_medida,
+        })
+    return JsonResponse({'items': items})
+
+
+@require_http_methods(["POST"])
+def product_add_ajax(request):
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+    
+    nome = data.get('nome', '').strip()
+    tipo_produto = data.get('tipo_produto', 'EPI').strip()
+    categoria = data.get('categoria', 'OUTRO').strip()
+    ca_numero = data.get('ca_numero', '').strip()
+    unidade_medida = data.get('unidade_medida', 'UND').strip()
+    fabricante = data.get('fabricante', '').strip()
+    tamanho_inicial = data.get('tamanho_inicial', 'U').strip()
+    
+    if not nome:
+        return JsonResponse({'success': False, 'error': 'Nome do produto é obrigatório.'}, status=400)
+    
+    # Prevenção de duplicados exatos
+    if Product.objects.filter(nome__iexact=nome).exists():
+        return JsonResponse({'success': False, 'error': 'Já existe um produto com este nome.'}, status=400)
+    
+    try:
+        with transaction.atomic():
+            product = Product.objects.create(
+                nome=nome,
+                tipo_produto=tipo_produto,
+                categoria=categoria if tipo_produto == 'EPI' else 'OUTRO',
+                ca_numero=ca_numero if tipo_produto == 'EPI' else '',
+                unidade_medida=unidade_medida,
+                fabricante=fabricante,
+                exige_ca=(tipo_produto == 'EPI' and bool(ca_numero)),
+                controlado_individualmente=True,
+                ativo=True
+            )
+            
+            # Se tiver C.A. e for EPI, verifica/cria a entrada no CertificadoAprovacao
+            ca_obj = None
+            if tipo_produto == 'EPI' and ca_numero:
+                num_norm = "".join([c for c in ca_numero if c.isdigit()])
+                if num_norm:
+                    ca_obj, created = CertificadoAprovacao.objects.get_or_create(
+                        numero=num_norm,
+                        defaults={
+                            'numero_exibicao': ca_numero,
+                            'fabricante': fabricante or 'Informado via NF',
+                            'data_validade': timezone.now().date() + timezone.timedelta(days=365*2), # 2 anos padrão
+                            'status_verificacao': 'INFORMADO_MANUALMENTE',
+                            'justificativa_manual': 'Cadastrado automaticamente via recebimento de Nota Fiscal.'
+                        }
+                    )
+            
+            # Cria variante padrão
+            variant = ProductVariant.objects.create(
+                product=product,
+                tamanho=tamanho_inicial or 'U',
+                estoque_minimo=0,
+                ativo=True
+            )
+            
+            # Grava auditoria
+            from audit.models import log_audit
+            log_audit(
+                request=request,
+                action=f"Cadastro rápido de Produto: {product.nome} (Tipo: {product.tipo_produto}) via AJAX",
+                model_name="Product",
+                object_id=product.id,
+                before=None,
+                after={'nome': product.nome, 'tipo_produto': product.tipo_produto, 'ca_numero': product.ca_numero}
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'product': {
+                    'id': product.id,
+                    'nome': product.nome,
+                    'tipo_produto': product.tipo_produto,
+                    'ca_numero': product.ca_numero or '',
+                    'unidade_medida': product.unidade_medida,
+                    'variant_id': variant.id,
+                    'tamanho': variant.tamanho,
+                    'ca_id': ca_obj.id if ca_obj else None
+                }
+            })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

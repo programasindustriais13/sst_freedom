@@ -1,22 +1,36 @@
 {% extends "base.html" %}
 
-{% block title %}Nova Nota Fiscal - SST Freedom{% endblock %}
+{% block title %}Nova Nota Fiscal / Recebimento - SST Freedom{% endblock %}
 
 {% block breadcrumbs %}
 <li class="breadcrumb-item"><a href="{% url 'fiscal_note_list' %}" class="text-primary text-decoration-none">Notas Fiscais</a></li>
-<li class="breadcrumb-item active text-secondary" aria-current="page">Nova Nota Fiscal</li>
+<li class="breadcrumb-item active text-secondary" aria-current="page">Novo Recebimento</li>
 {% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-12 col-lg-10">
+    <div class="col-12 col-lg-12">
         <div class="card-premium card-primary">
-            <h3 class="mb-4">Nova Nota Fiscal de Entrada</h3>
+            <h3 class="mb-4 text-light"><i class="bi bi-receipt me-2" style="color: var(--brand-primary);"></i>Lançamento de Recebimento (N.F. / Recibo)</h3>
             
-            <form method="post" enctype="multipart/form-data">
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger rounded-4 d-flex align-items-center gap-2 mb-4" role="alert">
+                <i class="bi bi-exclamation-octagon-fill"></i>
+                <div>
+                    {% for error in form.non_field_errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <form method="post" enctype="multipart/form-data" id="recebimento-form">
                 {% csrf_token %}
+                <input type="hidden" name="items_json" id="id_items_json" value="[]">
                 
                 <div class="row g-3 mb-4">
+                    <h5 class="text-light border-bottom pb-2 mb-3"><i class="bi bi-info-circle me-1"></i>Cabeçalho do Documento</h5>
+                    
                     <div class="col-12 col-md-4">
                         <label for="id_tipo" class="form-label text-secondary fw-semibold">Tipo do Documento</label>
                         <select name="tipo" id="id_tipo" class="form-select form-control-premium" required onchange="toggleFiscaleRequirements()">
@@ -30,6 +44,7 @@
                     <div class="col-12 col-md-4">
                         <label for="id_supplier" class="form-label text-secondary fw-semibold">Fornecedor</label>
                         <select name="supplier" id="id_supplier" class="form-select form-control-premium" required>
+                            <option value="" disabled selected>Selecione um fornecedor...</option>
                             {% for supplier in form.supplier.field.queryset %}
                             <option value="{{ supplier.id }}" {% if form.supplier.value == supplier.id %}selected{% endif %}>{{ supplier.razao_social }}</option>
                             {% endfor %}
@@ -59,6 +74,7 @@
                     <div class="col-6 col-md-4">
                         <label for="id_centro_custo" class="form-label text-secondary fw-semibold">Centro de Custo</label>
                         <select name="centro_custo" id="id_centro_custo" class="form-select form-control-premium" required>
+                            <option value="" disabled selected>Selecione o Centro de Custo...</option>
                             {% for choice in form.centro_custo.field.queryset %}
                             <option value="{{ choice.id }}" {% if form.centro_custo.value|stringformat:"s" == choice.id|stringformat:"s" %}selected{% endif %}>{{ choice.codigo }} - {{ choice.nome }}</option>
                             {% endfor %}
@@ -68,7 +84,7 @@
 
                     <div class="col-12 col-md-12">
                         <label for="id_chave_acesso" class="form-label text-secondary fw-semibold">Chave de Acesso (44 dígitos - opcional)</label>
-                        <input type="text" name="chave_acesso" id="id_chave_acesso" class="form-control form-control-premium" value="{{ form.chave_acesso.value|default:'' }}">
+                        <input type="text" name="chave_acesso" id="id_chave_acesso" class="form-control form-control-premium" value="{{ form.chave_acesso.value|default:'' }}" maxlength="44">
                         {{ form.chave_acesso.errors }}
                     </div>
 
@@ -85,17 +101,17 @@
 
                     <div class="col-4 col-md-4">
                         <label for="id_frete" class="form-label text-secondary fw-semibold">Valor Frete</label>
-                        <input type="number" step="0.01" name="frete" id="id_frete" class="form-control form-control-premium" value="{{ form.frete.value|default:'0.00' }}">
+                        <input type="number" step="0.01" name="frete" id="id_frete" class="form-control form-control-premium" value="{{ form.frete.value|default:'0.00' }}" onchange="validateTotalCalculated()">
                         {{ form.frete.errors }}
                     </div>
                     <div class="col-4 col-md-4">
                         <label for="id_desconto" class="form-label text-secondary fw-semibold">Valor Desconto</label>
-                        <input type="number" step="0.01" name="desconto" id="id_desconto" class="form-control form-control-premium" value="{{ form.desconto.value|default:'0.00' }}">
+                        <input type="number" step="0.01" name="desconto" id="id_desconto" class="form-control form-control-premium" value="{{ form.desconto.value|default:'0.00' }}" onchange="validateTotalCalculated()">
                         {{ form.desconto.errors }}
                     </div>
                     <div class="col-4 col-md-4">
                         <label for="id_valor_total" class="form-label text-secondary fw-semibold">Valor Total Informado</label>
-                        <input type="number" step="0.01" name="valor_total" id="id_valor_total" class="form-control form-control-premium" value="{{ form.valor_total.value|default:'' }}" required>
+                        <input type="number" step="0.01" name="valor_total" id="id_valor_total" class="form-control form-control-premium" value="{{ form.valor_total.value|default:'' }}" required onchange="validateTotalCalculated()">
                         {{ form.valor_total.errors }}
                     </div>
 
@@ -106,15 +122,55 @@
                     </div>
                 </div>
 
+                <!-- SEÇÃO DINÂMICA DE PRODUTOS RECEBIDOS -->
+                <div class="card-premium card-success mb-4 p-4 border border-success border-opacity-25" style="background-color: rgba(25, 135, 84, 0.05);">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="text-light mb-0"><i class="bi bi-box-seam me-2" style="color: var(--brand-success);"></i>Produtos Recebidos</h4>
+                        <button type="button" class="btn btn-success btn-premium btn-sm" onclick="addItemRow()">
+                            <i class="bi bi-plus-lg me-1"></i> Adicionar Produto
+                        </button>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0 align-middle" id="items-table">
+                            <thead>
+                                <tr>
+                                    <th style="min-width: 280px;">Produto</th>
+                                    <th style="width: 100px;">Qtd</th>
+                                    <th style="width: 90px;">Unidade</th>
+                                    <th style="width: 100px;">Tamanho</th>
+                                    <th style="width: 110px;">Lote Fabr.</th>
+                                    <th style="width: 130px;">C.A.</th>
+                                    <th style="width: 140px;">Validade</th>
+                                    <th style="width: 110px;">Unitário (R$)</th>
+                                    <th style="width: 110px;">Subtotal (R$)</th>
+                                    <th style="width: 60px;" class="text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="items-tbody">
+                                <!-- Dynamic rows here -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-3 text-end d-flex justify-content-between align-items-center">
+                        <span class="text-secondary small">Destino padrão: <strong class="text-success">Almoxarifado Central</strong></span>
+                        <h5 class="text-light mb-0">Total dos Itens: <span id="calculated-total" class="fw-bold text-success">R$ 0,00</span></h5>
+                    </div>
+                    <div id="divergence-warning" class="alert alert-warning py-2 px-3 rounded-3 mt-2 small d-none mb-0">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i> **Divergência:** A soma dos subtotais dos itens (com frete/desconto) não bate com o valor total informado. Justifique nas observações antes de salvar.
+                    </div>
+                </div>
+
                 <div class="mb-4">
                     <label for="id_observacoes" class="form-label text-secondary fw-semibold">Observações / Justificativas</label>
-                    <textarea name="observacoes" id="id_observacoes" rows="3" class="form-control form-control-premium">{{ form.observacoes.value|default:'' }}</textarea>
+                    <textarea name="observacoes" id="id_observacoes" rows="3" class="form-control form-control-premium" placeholder="Preencha caso haja divergências ou observações específicas.">{{ form.observacoes.value|default:'' }}</textarea>
                     {{ form.observacoes.errors }}
                 </div>
 
                 <div class="d-flex gap-2">
                     <button type="submit" class="btn btn-premium btn-premium-primary px-4">
-                        <i class="bi bi-check-lg me-2"></i> Criar Documento de Entrada
+                        <i class="bi bi-check-lg me-2"></i> Salvar e dar Entrada no Estoque
                     </button>
                     <a href="{% url 'fiscal_note_list' %}" class="btn btn-outline-secondary btn-premium px-4">
                         Cancelar
@@ -124,10 +180,99 @@
         </div>
     </div>
 </div>
+
+<!-- MODAL CADASTRAR NOVO PRODUTO -->
+<div class="modal fade" id="newProductModal" tabindex="-1" aria-labelledby="newProductModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-light bg-dark border-secondary rounded-4 shadow-lg">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="newProductModalLabel"><i class="bi bi-plus-circle-fill me-2 text-success"></i>Cadastrar Novo Produto</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-error" class="alert alert-danger py-2 px-3 rounded-3 small d-none mb-3"></div>
+                <form id="new-product-form">
+                    <div class="mb-3">
+                        <label for="modal_nome" class="form-label fw-semibold">Nome do Produto</label>
+                        <input type="text" id="modal_nome" class="form-control form-control-premium" required oninput="checkProductDuplicity(this.value)">
+                        <div id="duplicity-alert" class="alert alert-warning py-1 px-2 rounded-2 mt-2 small d-none"></div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label for="modal_tipo_produto" class="form-label fw-semibold">Classificação</label>
+                            <select id="modal_tipo_produto" class="form-select form-control-premium" required onchange="toggleModalCARequirement()">
+                                <option value="EPI" selected>EPI</option>
+                                <option value="MATERIAL_SEGURANCA">Material de Segurança</option>
+                                <option value="MATERIAL_CONSUMO">Material de Consumo</option>
+                                <option value="FERRAMENTA">Ferramenta</option>
+                                <option value="UNIFORME">Uniforme</option>
+                                <option value="OUTRO">Outro</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label for="modal_unidade_medida" class="form-label fw-semibold">Unidade Medida</label>
+                            <input type="text" id="modal_unidade_medida" class="form-control form-control-premium" value="UND" required>
+                        </div>
+                    </div>
+                    <div class="mb-3" id="modal_ca_container">
+                        <label for="modal_ca_numero" class="form-label fw-semibold">C.A. — Certificado de Aprovação</label>
+                        <input type="text" id="modal_ca_numero" class="form-control form-control-premium" placeholder="ex: 18731 ou CA 18731">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label for="modal_fabricante" class="form-label fw-semibold">Fabricante Padrão</label>
+                            <input type="text" id="modal_fabricante" class="form-control form-control-premium">
+                        </div>
+                        <div class="col-6">
+                            <label for="modal_tamanho_inicial" class="form-label fw-semibold">Tamanho Inicial</label>
+                            <input type="text" id="modal_tamanho_inicial" class="form-control form-control-premium" value="U" placeholder="ex: 40, M, G, U">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="modal_categoria" class="form-label fw-semibold" id="modal_categoria_label">Categoria de Proteção</label>
+                        <select id="modal_categoria" class="form-select form-control-premium">
+                            <option value="PROTECAO_CABECA">Proteção da Cabeça</option>
+                            <option value="PROTECAO_AUDITIVA">Proteção Auditiva</option>
+                            <option value="PROTECAO_RESPIRATORIA">Proteção Respiratória</option>
+                            <option value="PROTECAO_OCULAR">Proteção Ocular e Facial</option>
+                            <option value="PROTECAO_TRONCO">Proteção do Tronco</option>
+                            <option value="PROTECAO_MEMBROS_SUP">Proteção dos Membros Superiores</option>
+                            <option value="PROTECAO_MEMBROS_INF">Proteção dos Membros Inferiores</option>
+                            <option value="VESTUARIO">Vestuário / Fardamento</option>
+                            <option value="OUTRO" selected>Outro</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary btn-premium" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-success btn-premium" onclick="saveNewProductAjax()">Cadastrar Produto</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+    // Inicialização do catálogo de produtos vindos do backend
+    let availableProducts = [
+        {% for p in products %}
+        {
+            id: {{ p.id }},
+            nome: "{{ p.nome|escapejs }}",
+            tipo_produto: "{{ p.tipo_produto }}",
+            ca_numero: "{{ p.ca_numero|default:''|escapejs }}",
+            unidade_medida: "{{ p.unidade_medida|escapejs }}"
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+    // Remove tags de template vazias que o linter pode colocar
+    availableProducts = availableProducts.filter(p => p.id);
+
+    let activeRowIndexForModal = null;
+    let rowCounter = 0;
+
     function toggleFiscaleRequirements() {
         const tipoField = document.getElementById('id_tipo');
         const numField = document.getElementById('id_numero');
@@ -153,10 +298,354 @@
             labelSerie.innerText = "Série (Opcional)";
         }
     }
-    
+
+    function toggleModalCARequirement() {
+        const tipo = document.getElementById('modal_tipo_produto').value;
+        const caContainer = document.getElementById('modal_ca_container');
+        const catSelect = document.getElementById('modal_categoria');
+        const catLabel = document.getElementById('modal_categoria_label');
+        
+        if (tipo === 'EPI') {
+            caContainer.style.display = 'block';
+            catSelect.style.display = 'block';
+            catLabel.style.display = 'block';
+        } else {
+            caContainer.style.display = 'none';
+            document.getElementById('modal_ca_numero').value = '';
+            catSelect.style.display = 'none';
+            catLabel.style.display = 'none';
+        }
+    }
+
+    function checkProductDuplicity(val) {
+        if (!val || val.length < 3) {
+            document.getElementById('duplicity-alert').classList.add('d-none');
+            return;
+        }
+        fetch(`/ppe/search_ajax/?q=${encodeURIComponent(val)}`)
+            .then(res => res.json())
+            .then(data => {
+                const alertDiv = document.getElementById('duplicity-alert');
+                if (data.items && data.items.length > 0) {
+                    alertDiv.innerHTML = `⚠️ **Semelhante encontrado:** "${data.items[0].nome}" ${data.items[0].ca_numero ? '(C.A. ' + data.items[0].ca_numero + ')' : ''}. <button type="button" class="btn btn-link text-warning p-0 border-0 fs-7 fw-bold" onclick="selectExistingProduct(${data.items[0].id})">Selecionar este</button>`;
+                    alertDiv.classList.remove('d-none');
+                } else {
+                    alertDiv.classList.add('d-none');
+                }
+            });
+    }
+
+    function selectExistingProduct(id) {
+        if (activeRowIndexForModal !== null) {
+            const selectEl = document.getElementById(`prod_select_${activeRowIndexForModal}`);
+            if (selectEl) {
+                // Se o produto não estiver no select local, recarrega catálogo primeiro
+                if (![...selectEl.options].some(o => o.value == id)) {
+                    refreshLocalCatalogs(() => {
+                        selectEl.value = id;
+                        onProductSelectChange(activeRowIndexForModal);
+                    });
+                } else {
+                    selectEl.value = id;
+                    onProductSelectChange(activeRowIndexForModal);
+                }
+            }
+        }
+        const modal = bootstrap.Modal.getInstance(document.getElementById('newProductModal'));
+        if (modal) modal.hide();
+    }
+
+    function refreshLocalCatalogs(callback) {
+        fetch('/ppe/search_ajax/?q=')
+            .then(res => res.json())
+            .then(data => {
+                // Recarrega todos os selects com os novos produtos cadastrados
+                availableProducts = data.items || [];
+                document.querySelectorAll('[id^="prod_select_"]').forEach(selectEl => {
+                    const selectedVal = selectEl.value;
+                    selectEl.innerHTML = '<option value="" disabled>Selecione...</option>';
+                    availableProducts.forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.id;
+                        opt.innerText = `${p.nome} ${p.ca_numero ? '(C.A. ' + p.ca_numero + ')' : ''}`;
+                        selectEl.appendChild(opt);
+                    });
+                    selectEl.value = selectedVal;
+                });
+                if (callback) callback();
+            });
+    }
+
+    function onProductSelectChange(index) {
+        const select = document.getElementById(`prod_select_${index}`);
+        const prodId = select.value;
+        const prod = availableProducts.find(p => p.id == prodId);
+        
+        if (prod) {
+            document.getElementById(`prod_unidade_${index}`).value = prod.unidade_medida;
+            const caInput = document.getElementById(`prod_ca_${index}`);
+            caInput.value = prod.ca_numero || '';
+            
+            if (prod.tipo_produto === 'EPI') {
+                caInput.disabled = false;
+                caInput.placeholder = "C.A.";
+            } else {
+                caInput.disabled = true;
+                caInput.value = '';
+                caInput.placeholder = "Não Aplicável";
+            }
+        }
+        updateRowSubtotal(index);
+    }
+
+    function addItemRow() {
+        const tbody = document.getElementById('items-tbody');
+        const index = rowCounter++;
+        
+        let selectOptions = '<option value="" disabled selected>Selecione...</option>';
+        availableProducts.forEach(p => {
+            selectOptions += `<option value="${p.id}">${p.nome} ${p.ca_numero ? '(C.A. ' + p.ca_numero + ')' : ''}</option>`;
+        });
+
+        const tr = document.createElement('tr');
+        tr.id = `item_row_${index}`;
+        tr.innerHTML = `
+            <td>
+                <div class="input-group">
+                    <select id="prod_select_${index}" class="form-select form-control-premium" required onchange="onProductSelectChange(${index})">
+                        ${selectOptions}
+                    </select>
+                    <button type="button" class="btn btn-outline-success btn-sm border-secondary" onclick="openNewProductModalFor(${index})" title="Cadastrar Novo Produto">
+                        <i class="bi bi-plus-circle-fill"></i> Novo
+                    </button>
+                </div>
+            </td>
+            <td>
+                <input type="number" id="prod_qty_${index}" class="form-control form-control-premium text-center" min="1" value="1" required oninput="updateRowSubtotal(${index})">
+            </td>
+            <td>
+                <input type="text" id="prod_unidade_${index}" class="form-control form-control-premium text-center" value="UND" required>
+            </td>
+            <td>
+                <input type="text" id="prod_tamanho_${index}" class="form-control form-control-premium text-center" value="U" required>
+            </td>
+            <td>
+                <input type="text" id="prod_lote_${index}" class="form-control form-control-premium" placeholder="Lote" required>
+            </td>
+            <td>
+                <input type="text" id="prod_ca_${index}" class="form-control form-control-premium text-center" placeholder="C.A." value="">
+            </td>
+            <td>
+                <input type="date" id="prod_validade_${index}" class="form-control form-control-premium" required>
+            </td>
+            <td>
+                <input type="number" step="0.01" id="prod_cost_${index}" class="form-control form-control-premium text-end" placeholder="0,00" value="0.00" required oninput="updateRowSubtotal(${index})">
+            </td>
+            <td class="text-end text-light fw-semibold" id="prod_subtotal_${index}">
+                R$ 0,00
+            </td>
+            <td class="text-center">
+                <button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="removeItemRow(${index})">
+                    <i class="bi bi-trash3-fill"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+        updateRowSubtotal(index);
+    }
+
+    function removeItemRow(index) {
+        const row = document.getElementById(`item_row_${index}`);
+        if (row) {
+            row.remove();
+            calculateAllTotals();
+        }
+    }
+
+    function openNewProductModalFor(index) {
+        activeRowIndexForModal = index;
+        document.getElementById('new-product-form').reset();
+        document.getElementById('modal-error').classList.add('d-none');
+        document.getElementById('duplicity-alert').classList.add('d-none');
+        toggleModalCARequirement();
+        
+        const modal = new bootstrap.Modal(document.getElementById('newProductModal'));
+        modal.show();
+    }
+
+    function saveNewProductAjax() {
+        const nome = document.getElementById('modal_nome').value.trim();
+        const tipo_produto = document.getElementById('modal_tipo_produto').value;
+        const categoria = document.getElementById('modal_categoria').value;
+        const ca_numero = document.getElementById('modal_ca_numero').value.trim();
+        const unidade_medida = document.getElementById('modal_unidade_medida').value.trim();
+        const fabricante = document.getElementById('modal_fabricante').value.trim();
+        const tamanho_inicial = document.getElementById('modal_tamanho_inicial').value.trim();
+
+        if (!nome) {
+            const errDiv = document.getElementById('modal-error');
+            errDiv.innerText = "O nome do produto é obrigatório.";
+            errDiv.classList.remove('d-none');
+            return;
+        }
+
+        const payload = {
+            nome: nome,
+            tipo_produto: tipo_produto,
+            categoria: categoria,
+            ca_numero: ca_numero,
+            unidade_medida: unidade_medida,
+            fabricante: fabricante,
+            tamanho_inicial: tamanho_inicial
+        };
+
+        fetch('/ppe/add/ajax/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                // Insere produto na lista local
+                const newProd = data.product;
+                availableProducts.push(newProd);
+                
+                // Atualiza todos os combos da tela
+                refreshLocalCatalogs(() => {
+                    // Seleciona o novo produto na linha correspondente
+                    if (activeRowIndexForModal !== null) {
+                        const selectEl = document.getElementById(`prod_select_${activeRowIndexForModal}`);
+                        if (selectEl) {
+                            selectEl.value = newProd.id;
+                            onProductSelectChange(activeRowIndexForModal);
+                            
+                            // Define tamanho e unidade padrão retornada
+                            document.getElementById(`prod_tamanho_${activeRowIndexForModal}`).value = newProd.tamanho || 'U';
+                            document.getElementById(`prod_unidade_${activeRowIndexForModal}`).value = newProd.unidade_medida || 'UND';
+                        }
+                    }
+                    
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('newProductModal'));
+                    if (modal) modal.hide();
+                });
+            } else {
+                const errDiv = document.getElementById('modal-error');
+                errDiv.innerText = data.error || "Erro desconhecido ao salvar.";
+                errDiv.classList.remove('d-none');
+            }
+        })
+        .catch(err => {
+            const errDiv = document.getElementById('modal-error');
+            errDiv.innerText = "Falha de rede ao conectar ao servidor.";
+            errDiv.classList.remove('d-none');
+        });
+    }
+
+    function updateRowSubtotal(index) {
+        const qty = parseInt(document.getElementById(`prod_qty_${index}`).value) || 0;
+        const cost = parseFloat(document.getElementById(`prod_cost_${index}`).value) || 0;
+        const sub = qty * cost;
+        document.getElementById(`prod_subtotal_${index}`).innerText = `R$ ${sub.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        calculateAllTotals();
+    }
+
+    function calculateAllTotals() {
+        let totalItems = 0;
+        document.querySelectorAll('[id^="item_row_"]').forEach(row => {
+            const index = row.id.replace('item_row_', '');
+            const qty = parseInt(document.getElementById(`prod_qty_${index}`).value) || 0;
+            const cost = parseFloat(document.getElementById(`prod_cost_${index}`).value) || 0;
+            totalItems += (qty * cost);
+        });
+
+        document.getElementById('calculated-total').innerText = `R$ ${totalItems.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        validateTotalCalculated();
+    }
+
+    function validateTotalCalculated() {
+        const frete = parseFloat(document.getElementById('id_frete').value) || 0;
+        const desconto = parseFloat(document.getElementById('id_desconto').value) || 0;
+        const valorTotalInformado = parseFloat(document.getElementById('id_valor_total').value) || 0;
+        
+        let totalItems = 0;
+        document.querySelectorAll('[id^="item_row_"]').forEach(row => {
+            const index = row.id.replace('item_row_', '');
+            const qty = parseInt(document.getElementById(`prod_qty_${index}`).value) || 0;
+            const cost = parseFloat(document.getElementById(`prod_cost_${index}`).value) || 0;
+            totalItems += (qty * cost);
+        });
+
+        const totalCalculado = totalItems + frete - desconto;
+        
+        const warning = document.getElementById('divergence-warning');
+        // Usar pequena margem de tolerância devido a arredondamento de float em JS
+        if (Math.abs(totalCalculado - valorTotalInformado) > 0.015) {
+            warning.classList.remove('d-none');
+        } else {
+            warning.classList.add('d-none');
+        }
+    }
+
+    // Intercepta envio do formulário para salvar o JSON serializado
+    document.getElementById('recebimento-form').addEventListener('submit', function(e) {
+        const items = [];
+        let hasError = false;
+
+        document.querySelectorAll('[id^="item_row_"]').forEach(row => {
+            const index = row.id.replace('item_row_', '');
+            const prodSelect = document.getElementById(`prod_select_${index}`);
+            const qtyInput = document.getElementById(`prod_qty_${index}`);
+            const costInput = document.getElementById(`prod_cost_${index}`);
+            const caInput = document.getElementById(`prod_ca_${index}`);
+            
+            const product_id = prodSelect.value;
+            const quantidade = parseInt(qtyInput.value) || 0;
+            const custo_unitario = parseFloat(costInput.value) || 0;
+            const tamanho = document.getElementById(`prod_tamanho_${index}`).value.trim();
+            const identificador = document.getElementById(`prod_lote_${index}`).value.trim();
+            const ca_numero = caInput.value.trim();
+            const data_validade = document.getElementById(`prod_validade_${index}`).value;
+
+            if (!product_id || quantidade <= 0 || custo_unitario < 0 || !identificador || !data_validade) {
+                hasError = true;
+            }
+
+            items.push({
+                product_id: parseInt(product_id),
+                tamanho: tamanho,
+                ca_numero: ca_numero,
+                identificador: identificador,
+                data_validade: data_validade,
+                quantidade: quantidade,
+                custo_unitario: custo_unitario
+            });
+        });
+
+        if (items.length === 0) {
+            alert("Adicione pelo menos um produto ao recebimento.");
+            e.preventDefault();
+            return;
+        }
+
+        if (hasError) {
+            alert("Por favor, preencha todos os campos obrigatórios dos itens (Produto, Qtd, Lote, Validade, Custo).");
+            e.preventDefault();
+            return;
+        }
+
+        document.getElementById('id_items_json').value = JSON.stringify(items);
+    });
+
     // Executa na inicialização
     document.addEventListener('DOMContentLoaded', function() {
         toggleFiscaleRequirements();
+        toggleModalCARequirement();
+        // Inicializa com 1 linha vazia para facilitar a digitação do usuário
+        addItemRow();
     });
 </script>
 {% endblock %}

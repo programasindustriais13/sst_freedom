@@ -64,3 +64,37 @@
     </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const tipoField = document.getElementById('id_tipo_produto');
+        if (tipoField) {
+            const caField = document.getElementById('id_ca_numero');
+            const catField = document.getElementById('id_categoria');
+            
+            // Encontra os containers mb-3 correspondentes
+            const caContainer = caField ? caField.closest('.mb-3') : null;
+            const catContainer = catField ? catField.closest('.mb-3') : null;
+            const exigeCaField = document.getElementById('id_exige_ca');
+            const exigeCaContainer = exigeCaField ? exigeCaField.closest('.mb-3') : null;
+            
+            function toggleFields() {
+                if (tipoField.value === 'EPI') {
+                    if (caContainer) caContainer.style.display = 'block';
+                    if (catContainer) catContainer.style.display = 'block';
+                    if (exigeCaContainer) exigeCaContainer.style.display = 'block';
+                } else {
+                    if (caContainer) caContainer.style.display = 'none';
+                    if (catContainer) catContainer.style.display = 'none';
+                    if (exigeCaContainer) exigeCaContainer.style.display = 'none';
+                    if (caField) caField.value = '';
+                }
+            }
+            
+            tipoField.addEventListener('change', toggleFields);
+            toggleFields();
+        }
+    });
+</script>
+{% endblock %}
