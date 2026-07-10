@@ -166,3 +166,58 @@ class InventoryServicesTestCase(TestCase):
         self.assertEqual(get_stock_balance(self.loc_sst, self.variant, self.lot), 3)
         # Note that the lost units are written off from transit, so Almox is still reduced by 5, SST has 3.
         self.assertEqual(get_stock_balance(self.loc_almox, self.variant, self.lot), 5)
+
+
+from audit.models import AuditLog
+
+class FiscalNoteAndAuditTestCase(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(razao_social="Indústria Teste LTDA", nome_fantasia="Indústria Teste", cnpj="12345678000199")
+        self.unit = Unit.objects.create(company=self.company, codigo="UN-TEST", nome="Unidade Teste", cidade="Natal", estado="RN")
+        self.cc = CostCenter.objects.create(company=self.company, codigo="CC-01", nome="Centro de Custo 1")
+        self.user = User.objects.create_user(username="almoxarife2", password="pwd", profile_type="ALMOXARIFE")
+        self.supplier = Supplier.objects.create(razao_social="Fornecedor de EPIs LTDA", cnpj_cpf="98765432100019")
+
+    def test_create_receipt_without_number_success(self):
+        note = FiscalNote(
+            supplier=self.supplier,
+            unit=self.unit,
+            tipo="RECIBO",
+            numero=None,
+            serie=None,
+            data_emissao=timezone.now().date(),
+            data_recebimento=timezone.now().date(),
+            centro_custo=self.cc,
+            valor_total=100.0,
+            usuario=self.user,
+            status="RASCUNHO"
+        )
+        try:
+            note.full_clean()
+            note.save()
+        except ValidationError:
+            self.fail("ValidationError lançada para recibo sem número/série!")
+        self.assertIsNotNone(note.id)
+
+    def test_create_invoice_without_number_fails(self):
+        note = FiscalNote(
+            supplier=self.supplier,
+            unit=self.unit,
+            tipo="NOTA_FISCAL",
+            numero=None,
+            serie=None,
+            data_emissao=timezone.now().date(),
+            data_recebimento=timezone.now().date(),
+            centro_custo=self.cc,
+            valor_total=100.0,
+            usuario=self.user,
+            status="RASCUNHO"
+        )
+        with self.assertRaises(ValidationError):
+            note.full_clean()
+
+    def test_audit_log_login_failed(self):
+        AuditLog.objects.all().delete()
+        self.client.post('/accounts/login/', {'username': 'usuario_inexistente', 'password': 'senha_errada'})
+        logs = AuditLog.objects.filter(action__icontains="Tentativa de login falha")
+        self.assertTrue(logs.exists())

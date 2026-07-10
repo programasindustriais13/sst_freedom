@@ -38,3 +38,21 @@ def log_action(user, action, model_name, object_id=None, before=None, after=None
         ip_address=ip,
         user_agent=ua
     )
+
+
+def log_audit(request, action, model_name, object_id=None, before=None, after=None):
+    """
+    Grava um log de auditoria associando o usuário autenticado, IP e User Agent do request.
+    """
+    user = request.user if request and request.user.is_authenticated else None
+    ip = None
+    ua = None
+    if request:
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0].strip()
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        ua = request.META.get('HTTP_USER_AGENT')
+        
+    return log_action(user, action, model_name, object_id, before, after, ip, ua)

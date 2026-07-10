@@ -1,0 +1,70 @@
+# ==============================================================================
+# SST FREEDOM - GITIGNORE
+# ==============================================================================
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual Environment ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Build / Packaging ---
+build/
+dist/
+*.egg-info/
+
+# --- Logs ---
+*.log
+logs/
+
+# --- SQLite ---
+db.sqlite3
+db.sqlite3-journal
+
+# --- Environment Settings ---
+.env
+.env.*
+
+# --- IDEs / Editors ---
+.vscode/
+.idea/
+
+# --- OS Specific ---
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# --- Cache ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# --- Coverage ---
+.coverage
+htmlcov/
+
+# --- Django Static & Media ---
+staticfiles/
+media/
+
+# --- Node ---
+node_modules/
+
+# ==============================================================================
+# EXPLICIT INCLUSIONS (DO NOT IGNORE)
+# ==============================================================================
+!.env.example
+!manage.py
+!README.md
+!requirements.txt
+!pyproject.toml
+!contexto/
+!migrations/
+!templates/
+!static/

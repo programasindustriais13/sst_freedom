@@ -38,7 +38,7 @@ class FiscalNoteListView(LoginRequiredMixin, ListView):
 
 class FiscalNoteCreateView(LoginRequiredMixin, CreateView):
     model = FiscalNote
-    fields = ['supplier', 'unit', 'numero', 'serie', 'chave_acesso', 'data_emissao', 'data_recebimento', 'centro_custo', 'frete', 'desconto', 'valor_total', 'documento_anexo', 'observacoes']
+    fields = ['tipo', 'supplier', 'unit', 'numero', 'serie', 'chave_acesso', 'data_emissao', 'data_recebimento', 'centro_custo', 'frete', 'desconto', 'valor_total', 'documento_anexo', 'observacoes']
     template_name = "inventory/nfs_form.html"
 
     def get_form(self, form_class=None):
@@ -52,7 +52,7 @@ class FiscalNoteCreateView(LoginRequiredMixin, CreateView):
         form.instance.usuario = self.request.user
         form.instance.status = 'RASCUNHO'
         response = super().form_valid(form)
-        messages.success(self.request, "Nota Fiscal criada em Rascunho. Adicione os lotes correspondentes.")
+        messages.success(self.request, "Documento de entrada criado em Rascunho. Adicione os itens correspondentes.")
         return response
 
     def get_success_url(self):
@@ -66,21 +66,28 @@ class FiscalNoteDetailView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['lots'] = self.object.lots.all().select_related('product_variant__product')
+        context['lots'] = self.object.lots.all().select_related('product_variant__product', 'ca')
         # Filtra variantes de EPI para o form de adicionar lote
         context['variants'] = ProductVariant.objects.filter(ativo=True).select_related('product')
+        # Filtra C.A.s ativos/cadastrados para o seletor
+        from ppe.models import CertificadoAprovacao
+        context['cas'] = CertificadoAprovacao.objects.all().order_selection = ['numero_exibicao'] if hasattr(CertificadoAprovacao.objects.all(), 'order_selection') else CertificadoAprovacao.objects.all().order_by('numero_exibicao')
+        # Calcula totais
+        total_items = sum(lot.quantidade_inicial * lot.custo_unitario for lot in context['lots'])
+        context['total_items'] = total_items
+        context['divergencia'] = total_items != self.object.valor_total
         return context
 
 
 class LotCreateView(LoginRequiredMixin, CreateView):
     model = Lot
-    fields = ['product_variant', 'identificador', 'data_fabricacao', 'data_validade', 'quantidade_inicial', 'custo_unitario']
+    fields = ['product_variant', 'ca', 'identificador', 'data_fabricacao', 'data_validade', 'quantidade_inicial', 'custo_unitario']
     
     def post(self, request, *args, **kwargs):
         note_id = self.kwargs.get('note_pk')
         note = get_object_or_404(FiscalNote, pk=note_id)
         if note.status != 'RASCUNHO':
-            messages.error(request, "Não é possível adicionar lotes a uma nota fiscal já confirmada.")
+            messages.error(request, "Não é possível adicionar lotes a um documento já confirmado.")
             return redirect('fiscal_note_detail', pk=note_id)
             
         form = self.get_form()
@@ -94,14 +101,52 @@ class LotCreateView(LoginRequiredMixin, CreateView):
         return redirect('fiscal_note_detail', pk=note_id)
 
 
+class LotDeleteView(LoginRequiredMixin, CreateView):
+    # Classe para excluir lote de documento em rascunho
+    def post(self, request, *args, **kwargs):
+        lot = get_object_or_404(Lot, pk=self.kwargs.get('pk'))
+        note = lot.fiscal_note
+        if note.status != 'RASCUNHO':
+            messages.error(request, "Não é possível excluir lotes de um documento já confirmado.")
+        else:
+            lot_ident = lot.identificador
+            lot.delete()
+            messages.success(request, f"Item Lote {lot_ident} removido com sucesso.")
+        return redirect('fiscal_note_detail', pk=note.id)
+
+
 def confirm_fiscal_note_view(request, pk):
     if request.method == 'POST':
         note = get_object_or_404(FiscalNote, pk=pk)
+        
+        # Validação: nota não pode ser confirmada sem itens
+        if not note.lots.exists():
+            messages.error(request, "Não é possível confirmar um documento de recebimento sem itens cadastrados.")
+            return redirect('fiscal_note_detail', pk=pk)
+            
+        # Validação: divergência de valores
+        total_items = sum(lot.quantidade_inicial * lot.custo_unitario for lot in note.lots.all())
+        if total_items != note.valor_total:
+            if not note.observacoes or not note.observacoes.strip():
+                messages.error(request, "Existe divergência entre o valor total informado e o calculado. Por favor, insira uma justificativa no campo 'Observações' antes de confirmar.")
+                return redirect('fiscal_note_detail', pk=pk)
+                
         try:
             confirm_fiscal_note(note, request.user)
-            messages.success(request, "Nota Fiscal confirmada! Entrada física de estoque gerada no Almoxarifado.")
+            messages.success(request, "Recebimento confirmado! Entrada física de estoque gerada no Almoxarifado.")
+            
+            # Grava auditoria
+            from audit.models import log_audit
+            log_audit(
+                request=request,
+                action=f"Confirmação de Documento de Entrada: {note.numero or 'S/N'} (Tipo: {note.get_tipo_display()})",
+                model_name="FiscalNote",
+                object_id=note.id,
+                before={'status': 'RASCUNHO'},
+                after={'status': 'CONFERIDA', 'valor_total': float(note.valor_total)}
+            )
         except Exception as e:
-            messages.error(request, f"Erro ao confirmar nota fiscal: {str(e)}")
+            messages.error(request, f"Erro ao confirmar recebimento: {str(e)}")
         return redirect('fiscal_note_detail', pk=pk)
     return redirect('fiscal_note_list')
 
@@ -209,6 +254,17 @@ def expedite_transfer_view(request, pk):
         try:
             expedite_transfer(transfer, request.user)
             messages.success(request, "Transferência expedida com sucesso! Carga em trânsito.")
+            
+            # Grava auditoria
+            from audit.models import log_audit
+            log_audit(
+                request=request,
+                action=f"Expedição de Transferência: TR-{transfer.id} ({transfer.source_location.nome} -> {transfer.dest_location.nome})",
+                model_name="StockTransfer",
+                object_id=transfer.id,
+                before={'status': 'RASCUNHO'},
+                after={'status': 'EXPEDIDA'}
+            )
         except Exception as e:
             messages.error(request, f"Erro ao expedir transferência: {str(e)}")
         return redirect('transfer_detail', pk=pk)
@@ -240,6 +296,17 @@ def receive_transfer_view(request, pk):
         try:
             receive_transfer(transfer, request.user, recepcoes, justificativa)
             messages.success(request, "Transferência recebida no local de destino! Estoque SST atualizado.")
+            
+            # Grava auditoria
+            from audit.models import log_audit
+            log_audit(
+                request=request,
+                action=f"Recebimento de Transferência: TR-{transfer.id} (Status: {transfer.get_status_display()})",
+                model_name="StockTransfer",
+                object_id=transfer.id,
+                before={'status': 'EXPEDIDA'},
+                after={'status': transfer.status, 'justificativa': justificativa}
+            )
         except Exception as e:
             messages.error(request, f"Erro ao receber transferência: {str(e)}")
         return redirect('transfer_detail', pk=pk)

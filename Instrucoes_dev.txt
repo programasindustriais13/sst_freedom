@@ -1,0 +1,21 @@
+python -m venv .venv
+
+.\.venv\Scripts\Activate.ps1
+
+python manage.py runserver 0.0.0.0:8000
+
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+
+python manage.py makemigrations
+python manage.py migrate
+
+python manage.py createsuperuser
+
+Adicionar as alterações na staging area:
+   git add .
+
+4. Criar o commit registrando a funcionalidade:
+   git commit -m "feat: implementar melhorias dp inss card tempo e identidade visual"
+
+   git push

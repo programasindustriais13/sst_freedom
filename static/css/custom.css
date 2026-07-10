@@ -63,6 +63,23 @@ h1, h2, h3, h4, h5, h6 {
     background: var(--bg-card-hover);
 }
 
+/* Legibility fixes for card-premium hovered inside links, and nested links */
+a:hover .card-premium, a:focus .card-premium {
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.card-premium a {
+    color: var(--primary);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.card-premium a:hover, .card-premium a:focus {
+    color: #38bdf8 !important; /* Highly readable light blue over --bg-card-hover (#162035) */
+    text-decoration: underline;
+}
+
 .card-premium::before {
     content: '';
     position: absolute;

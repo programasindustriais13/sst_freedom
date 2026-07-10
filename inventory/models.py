@@ -19,6 +19,13 @@ class Supplier(models.Model):
 
 
 class FiscalNote(models.Model):
+    TIPO_CHOICES = (
+        ('NOTA_FISCAL', 'Nota Fiscal'),
+        ('RECIBO', 'Recibo'),
+        ('SEM_DOCUMENTO', 'Sem documento'),
+        ('OUTRO', 'Outro'),
+    )
+
     STATUS_CHOICES = (
         ('RASCUNHO', 'Rascunho'),
         ('CONFERIDA', 'Conferida (Confirmada)'),
@@ -27,8 +34,9 @@ class FiscalNote(models.Model):
 
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='fiscal_notes', verbose_name="Fornecedor")
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name='fiscal_notes', verbose_name="Unidade Recebedora")
-    numero = models.CharField(max_length=50, verbose_name="Número da Nota Fiscal")
-    serie = models.CharField(max_length=10, verbose_name="Série")
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='NOTA_FISCAL', verbose_name="Tipo de Documento")
+    numero = models.CharField(max_length=50, blank=True, null=True, verbose_name="Número do Documento")
+    serie = models.CharField(max_length=10, blank=True, null=True, verbose_name="Série")
     chave_acesso = models.CharField(max_length=44, blank=True, null=True, verbose_name="Chave de Acesso")
     
     data_emissao = models.DateField(verbose_name="Data de Emissão")
@@ -54,12 +62,25 @@ class FiscalNote(models.Model):
         unique_together = ('supplier', 'numero', 'serie')
 
     def __str__(self):
-        return f"NF {self.numero} - {self.supplier.razao_social}"
+        doc_num = self.numero if self.numero else f"S/N (ID {self.id})"
+        return f"{self.get_tipo_display()} {doc_num} - {self.supplier.razao_social}"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.tipo == 'NOTA_FISCAL':
+            errors = {}
+            if not self.numero:
+                errors['numero'] = "O número é obrigatório para Nota Fiscal."
+            if not self.serie:
+                errors['serie'] = "A série é obrigatória para Nota Fiscal."
+            if errors:
+                raise ValidationError(errors)
 
 
 class Lot(models.Model):
     product_variant = models.ForeignKey('ppe.ProductVariant', on_delete=models.PROTECT, related_name='lots', verbose_name="Variante de EPI")
     fiscal_note = models.ForeignKey(FiscalNote, on_delete=models.PROTECT, blank=True, null=True, related_name='lots', verbose_name="Nota Fiscal")
+    ca = models.ForeignKey('ppe.CertificadoAprovacao', on_delete=models.PROTECT, blank=True, null=True, verbose_name="C.A. (Certificado de Aprovação)")
     identificador = models.CharField(max_length=100, verbose_name="Lote do Fabricante")
     
     data_fabricacao = models.DateField(blank=True, null=True, verbose_name="Data de Fabricação")
@@ -68,6 +89,10 @@ class Lot(models.Model):
     quantidade_inicial = models.IntegerField(verbose_name="Quantidade Inicial")
     custo_unitario = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Custo Unitário")
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
+
+    @property
+    def subtotal(self):
+        return self.quantidade_inicial * self.custo_unitario
 
     class Meta:
         verbose_name = "Lote"

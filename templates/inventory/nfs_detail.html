@@ -24,10 +24,10 @@
 </div>
 
 <div class="row g-4">
-    <!-- Informações da Nota -->
+    <!-- Informações da Nota / Documento -->
     <div class="col-12 col-md-4">
         <div class="card-premium card-primary">
-            <h4 class="mb-3 text-light">Dados da Nota</h4>
+            <h4 class="mb-3 text-light">Dados do Documento</h4>
             <div class="row g-3 text-secondary">
                 <div class="col-12">
                     <small class="text-muted d-block">Fornecedor</small>
@@ -38,13 +38,17 @@
                     <span class="text-light">{{ note.unit.codigo }}</span>
                 </div>
                 <div class="col-6">
+                    <small class="text-muted d-block">Tipo de Documento</small>
+                    <span class="badge bg-info">{{ note.get_tipo_display }}</span>
+                </div>
+                <div class="col-6">
                     <small class="text-muted d-block">Status</small>
                     {% if note.status == 'RASCUNHO' %}
                     <span class="badge bg-secondary">Rascunho</span>
                     {% elif note.status == 'CONFERIDA' %}
-                    <span class="badge bg-success">Conferida</span>
+                    <span class="badge bg-success">Conferido</span>
                     {% else %}
-                    <span class="badge bg-danger">Cancelada</span>
+                    <span class="badge bg-danger">Cancelado</span>
                     {% endif %}
                 </div>
                 <div class="col-6">
@@ -56,13 +60,24 @@
                     <span class="text-light">{{ note.data_recebimento|date:"d/m/Y" }}</span>
                 </div>
                 <div class="col-6">
-                    <small class="text-muted d-block">Valor Total</small>
+                    <small class="text-muted d-block">Valor Informado</small>
                     <span class="text-light fw-bold">R$ {{ note.valor_total|floatformat:2 }}</span>
                 </div>
                 <div class="col-6">
-                    <small class="text-muted d-block">Centro de Custo</small>
-                    <span class="text-light">{{ note.centro_custo.codigo }}</span>
+                    <small class="text-muted d-block">Valor Calculado</small>
+                    <span class="{% if divergencia %}text-warning fw-bold{% else %}text-success{% endif %}">R$ {{ total_items|floatformat:2 }}</span>
                 </div>
+                <div class="col-12">
+                    <small class="text-muted d-block">Centro de Custo</small>
+                    <span class="text-light">{{ note.centro_custo.codigo }} - {{ note.centro_custo.nome }}</span>
+                </div>
+                {% if divergencia %}
+                <div class="col-12">
+                    <div class="alert alert-warning py-2 px-3 rounded-3 mb-0 small">
+                        <i class="bi bi-exclamation-triangle-fill"></i> **Divergência:** A soma dos itens não bate com o valor informado. Por favor, justifique nas observações antes de confirmar.
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -70,16 +85,21 @@
     <!-- Itens / Lotes -->
     <div class="col-12 col-md-8">
         <div class="card-premium mb-4">
-            <h4 class="mb-3 text-light">Lotes de EPIs Recebidos</h4>
+            <h4 class="mb-3 text-light">Itens / Lotes Recebidos</h4>
             <div class="table-responsive">
                 <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
                     <thead>
                         <tr>
                             <th class="text-muted border-0">EPI / Variante</th>
                             <th class="text-muted border-0">Lote Fabricante</th>
+                            <th class="text-muted border-0 text-center">C.A.</th>
                             <th class="text-muted border-0">Validade Física</th>
-                            <th class="text-muted border-0 text-center">Quantidade</th>
-                            <th class="text-muted border-0 text-end">Custo Unit.</th>
+                            <th class="text-muted border-0 text-center">Qtd</th>
+                            <th class="text-muted border-0 text-end">Unitário</th>
+                            <th class="text-muted border-0 text-end">Subtotal</th>
+                            {% if note.status == 'RASCUNHO' %}
+                            <th class="text-muted border-0 text-center">Ações</th>
+                            {% endif %}
                         </tr>
                     </thead>
                     <tbody>
@@ -90,13 +110,31 @@
                                 <small class="text-muted d-block">Tamanho: {{ lot.product_variant.tamanho }}</small>
                             </td>
                             <td>{{ lot.identificador }}</td>
+                            <td class="text-center">
+                                {% if lot.ca %}
+                                <span class="badge bg-secondary">{{ lot.ca.numero_exibicao }}</span>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                             <td>{{ lot.data_validade|date:"d/m/Y" }}</td>
                             <td class="text-center text-light">{{ lot.quantidade_inicial }}</td>
                             <td class="text-end text-light">R$ {{ lot.custo_unitario|floatformat:2 }}</td>
+                            <td class="text-end text-light">R$ {{ lot.subtotal|floatformat:2 }}</td>
+                            {% if note.status == 'RASCUNHO' %}
+                            <td class="text-center">
+                                <form method="post" action="{% url 'lot_delete' lot.id %}" onsubmit="return confirm('Deseja realmente remover este item?');" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger py-1 px-2 rounded-3" title="Remover Item">
+                                        <i class="bi bi-trash3-fill"></i>
+                                    </button>
+                                </form>
+                            </td>
+                            {% endif %}
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5" class="text-center text-muted border-0 py-4">Nenhum lote associado a esta nota fiscal.</td>
+                            <td colspan="8" class="text-center text-muted border-0 py-4">Nenhum item associado a este recebimento.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -107,11 +145,11 @@
         <!-- Adicionar Lote se em Rascunho -->
         {% if note.status == 'RASCUNHO' %}
         <div class="card-premium">
-            <h4 class="mb-3 text-success">Adicionar Lote de EPI</h4>
+            <h4 class="mb-3 text-success">Adicionar Item / Lote</h4>
             <form method="post" action="{% url 'lot_create' note.id %}">
                 {% csrf_token %}
                 <div class="row g-3">
-                    <div class="col-12 col-md-6">
+                    <div class="col-12 col-md-4">
                         <label for="id_product_variant" class="form-label text-secondary fw-semibold">EPI / Variante</label>
                         <select name="product_variant" id="id_product_variant" class="form-select form-control-premium" required>
                             {% for variant in variants %}
@@ -119,8 +157,17 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-12 col-md-6">
-                        <label for="id_identificador" class="form-label text-secondary fw-semibold">Identificador do Lote</label>
+                    <div class="col-12 col-md-4">
+                        <label for="id_ca" class="form-label text-secondary fw-semibold">C.A. Oficial (Opcional)</label>
+                        <select name="ca" id="id_ca" class="form-select form-control-premium">
+                            <option value="">Nenhum / Não aplicável</option>
+                            {% for ca in cas %}
+                            <option value="{{ ca.id }}">{{ ca.numero_exibicao }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label for="id_identificador" class="form-label text-secondary fw-semibold">Lote do Fabricante</label>
                         <input type="text" name="identificador" id="id_identificador" class="form-control form-control-premium" required>
                     </div>
                     <div class="col-12 col-md-6">
@@ -128,20 +175,20 @@
                         <input type="date" name="data_fabricacao" id="id_data_fabricacao" class="form-control form-control-premium">
                     </div>
                     <div class="col-12 col-md-6">
-                        <label for="id_data_validade" class="form-label text-secondary fw-semibold">Data Validade Física</label>
+                        <label for="id_data_validade" class="form-label text-secondary fw-semibold">Validade Física do Produto</label>
                         <input type="date" name="data_validade" id="id_data_validade" class="form-control form-control-premium" required>
                     </div>
                     <div class="col-6 col-md-6">
-                        <label for="id_quantidade_inicial" class="form-label text-secondary fw-semibold">Quantidade Inicial</label>
-                        <input type="number" name="quantidade_inicial" id="id_quantidade_inicial" class="form-control form-control-premium" required>
+                        <label for="id_quantidade_inicial" class="form-label text-secondary fw-semibold">Quantidade</label>
+                        <input type="number" name="quantidade_inicial" id="id_quantidade_inicial" class="form-control form-control-premium" required min="1">
                     </div>
                     <div class="col-6 col-md-6">
                         <label for="id_custo_unitario" class="form-label text-secondary fw-semibold">Custo Unitário</label>
-                        <input type="number" step="0.01" name="custo_unitario" id="id_custo_unitario" class="form-control form-control-premium" required>
+                        <input type="number" step="0.01" name="custo_unitario" id="id_custo_unitario" class="form-control form-control-premium" required min="0">
                     </div>
                 </div>
                 <button type="submit" class="btn btn-premium btn-premium-primary mt-4">
-                    <i class="bi bi-plus-lg me-2"></i> Adicionar Lote
+                    <i class="bi bi-plus-lg me-2"></i> Adicionar Item
                 </button>
             </form>
         </div>

@@ -114,6 +114,18 @@ class CertificadoAprovacaoCreateView(LoginRequiredMixin, CreateView):
         form.instance.situacao = 'VÁLIDO' if form.cleaned_data.get('data_validade') >= timezone.now().date() else 'VENCIDO'
         
         response = super().form_valid(form)
+        
+        # Grava auditoria
+        from audit.models import log_audit
+        log_audit(
+            request=self.request,
+            action=f"Cadastro manual de C.A.: {self.object.numero_exibicao} (Fabricante: {self.object.fabricante})",
+            model_name="CertificadoAprovacao",
+            object_id=self.object.id,
+            before=None,
+            after={'numero_exibicao': self.object.numero_exibicao, 'justificativa': self.object.justificativa_manual}
+        )
+        
         messages.success(self.request, f"Certificado {num_exib} cadastrado manualmente.")
         return response
 
@@ -184,6 +196,18 @@ class PPEDeliveryCreateView(LoginRequiredMixin, CreateView):
                     natureza_entrega=natureza_entrega,
                     motivo_substituicao=motivo_substituicao
                 )
+                
+                # Grava auditoria
+                from audit.models import log_audit
+                log_audit(
+                    request=request,
+                    action=f"Entrega individual de EPI: {product_variant.product.nome} para {employee.nome_completo}",
+                    model_name="PPEDelivery",
+                    object_id=delivery.id,
+                    before=None,
+                    after={'colaborador': employee.nome_completo, 'matricula': employee.matricula, 'quantidade': quantidade, 'status_assinatura': 'PENDENTE'}
+                )
+                
                 messages.success(request, f"EPI {product_variant.product.nome} entregue com sucesso! Coleta de ciência pendente.")
                 return redirect('delivery_sign', pk=delivery.id)
             except Exception as e:
@@ -203,6 +227,18 @@ def delivery_sign_view(request, pk):
             
         try:
             confirm_delivery_signature(delivery, nome_confirmacao)
+            
+            # Grava auditoria
+            from audit.models import log_audit
+            log_audit(
+                request=request,
+                action=f"Confirmação de Ciência de Entrega: Colaborador {delivery.employee.nome_completo} assinou recibo",
+                model_name="PPEDelivery",
+                object_id=delivery.id,
+                before={'status_assinatura': 'PENDENTE'},
+                after={'status_assinatura': 'ASSINADO', 'confirmado_por': nome_confirmacao, 'hash': delivery.recibo_hash}
+            )
+            
             messages.success(request, "Ciência do trabalhador registrada e recibo assinado eletronicamente!")
             return redirect('employee_detail', pk=delivery.employee.id)
         except Exception as e:

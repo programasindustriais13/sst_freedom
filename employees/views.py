@@ -92,6 +92,18 @@ class EmployeeCreateView(LoginRequiredMixin, CreateView):
             alterado_por=self.request.user,
             observacao="Histórico funcional inicial criado no cadastro do colaborador."
         )
+        
+        # Grava auditoria
+        from audit.models import log_audit
+        log_audit(
+            request=self.request,
+            action=f"Criação de colaborador: {self.object.nome_completo} (Matrícula: {self.object.matricula})",
+            model_name="Employee",
+            object_id=self.object.id,
+            before=None,
+            after={'nome': self.object.nome_completo, 'matricula': self.object.matricula, 'cpf': self.object.cpf}
+        )
+        
         messages.success(self.request, "Colaborador cadastrado com sucesso!")
         return response
 
@@ -148,7 +160,18 @@ class EmployeeUpdateView(LoginRequiredMixin, UpdateView):
             )
             messages.info(self.request, "Cadastro e histórico funcional do colaborador atualizados.")
         else:
-            messages.success(self.request, "Colaborador atualizado com sucesso.")
+            messages.success(self.request, "Cadastro do colaborador atualizado com sucesso.")
+            
+        # Grava auditoria
+        from audit.models import log_audit
+        log_audit(
+            request=self.request,
+            action=f"Alteração de colaborador: {self.object.nome_completo} (Matrícula: {self.object.matricula})",
+            model_name="Employee",
+            object_id=self.object.id,
+            before={'funcao': old_instance.funcao.nome, 'setor': old_instance.setor.nome, 'unit': old_instance.unit.codigo, 'centro_custo': old_instance.centro_custo.codigo, 'situacao': old_instance.situacao},
+            after={'funcao': self.object.funcao.nome, 'setor': self.object.setor.nome, 'unit': self.object.unit.codigo, 'centro_custo': self.object.centro_custo.codigo, 'situacao': self.object.situacao}
+        )
 
         return response
 

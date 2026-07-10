@@ -17,7 +17,17 @@
                 {% csrf_token %}
                 
                 <div class="row g-3 mb-4">
-                    <div class="col-12 col-md-6">
+                    <div class="col-12 col-md-4">
+                        <label for="id_tipo" class="form-label text-secondary fw-semibold">Tipo do Documento</label>
+                        <select name="tipo" id="id_tipo" class="form-select form-control-premium" required onchange="toggleFiscaleRequirements()">
+                            <option value="NOTA_FISCAL" {% if form.tipo.value == "NOTA_FISCAL" or not form.tipo.value %}selected{% endif %}>Nota Fiscal</option>
+                            <option value="RECIBO" {% if form.tipo.value == "RECIBO" %}selected{% endif %}>Recibo</option>
+                            <option value="SEM_DOCUMENTO" {% if form.tipo.value == "SEM_DOCUMENTO" %}selected{% endif %}>Sem documento</option>
+                            <option value="OUTRO" {% if form.tipo.value == "OUTRO" %}selected{% endif %}>Outro</option>
+                        </select>
+                        {{ form.tipo.errors }}
+                    </div>
+                    <div class="col-12 col-md-4">
                         <label for="id_supplier" class="form-label text-secondary fw-semibold">Fornecedor</label>
                         <select name="supplier" id="id_supplier" class="form-select form-control-premium" required>
                             {% for supplier in form.supplier.field.queryset %}
@@ -26,7 +36,7 @@
                         </select>
                         {{ form.supplier.errors }}
                     </div>
-                    <div class="col-12 col-md-6">
+                    <div class="col-12 col-md-4">
                         <label for="id_unit" class="form-label text-secondary fw-semibold">Unidade Recebedora</label>
                         <select name="unit" id="id_unit" class="form-select form-control-premium" required>
                             {% for choice in form.unit.field.queryset %}
@@ -37,12 +47,12 @@
                     </div>
 
                     <div class="col-12 col-md-4">
-                        <label for="id_numero" class="form-label text-secondary fw-semibold">Número da Nota Fiscal</label>
+                        <label for="id_numero" id="label_numero" class="form-label text-secondary fw-semibold">Número da Nota Fiscal</label>
                         <input type="text" name="numero" id="id_numero" class="form-control form-control-premium" value="{{ form.numero.value|default:'' }}" required>
                         {{ form.numero.errors }}
                     </div>
                     <div class="col-6 col-md-4">
-                        <label for="id_serie" class="form-label text-secondary fw-semibold">Série</label>
+                        <label for="id_serie" id="label_serie" class="form-label text-secondary fw-semibold">Série</label>
                         <input type="text" name="serie" id="id_serie" class="form-control form-control-premium" value="{{ form.serie.value|default:'' }}" required>
                         {{ form.serie.errors }}
                     </div>
@@ -84,27 +94,27 @@
                         {{ form.desconto.errors }}
                     </div>
                     <div class="col-4 col-md-4">
-                        <label for="id_valor_total" class="form-label text-secondary fw-semibold">Valor Total da Nota</label>
+                        <label for="id_valor_total" class="form-label text-secondary fw-semibold">Valor Total Informado</label>
                         <input type="number" step="0.01" name="valor_total" id="id_valor_total" class="form-control form-control-premium" value="{{ form.valor_total.value|default:'' }}" required>
                         {{ form.valor_total.errors }}
                     </div>
 
                     <div class="col-12">
-                        <label for="id_documento_anexo" class="form-label text-secondary fw-semibold">Anexar PDF da Nota (Opcional)</label>
+                        <label for="id_documento_anexo" class="form-label text-secondary fw-semibold">Anexar PDF / Imagem do Documento (Opcional)</label>
                         <input type="file" name="documento_anexo" id="id_documento_anexo" class="form-control form-control-premium">
                         {{ form.documento_anexo.errors }}
                     </div>
                 </div>
 
                 <div class="mb-4">
-                    <label for="id_observacoes" class="form-label text-secondary fw-semibold">Observações</label>
+                    <label for="id_observacoes" class="form-label text-secondary fw-semibold">Observações / Justificativas</label>
                     <textarea name="observacoes" id="id_observacoes" rows="3" class="form-control form-control-premium">{{ form.observacoes.value|default:'' }}</textarea>
                     {{ form.observacoes.errors }}
                 </div>
 
                 <div class="d-flex gap-2">
                     <button type="submit" class="btn btn-premium btn-premium-primary px-4">
-                        <i class="bi bi-check-lg me-2"></i> Criar Nota Fiscal
+                        <i class="bi bi-check-lg me-2"></i> Criar Documento de Entrada
                     </button>
                     <a href="{% url 'fiscal_note_list' %}" class="btn btn-outline-secondary btn-premium px-4">
                         Cancelar
@@ -114,4 +124,39 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function toggleFiscaleRequirements() {
+        const tipoField = document.getElementById('id_tipo');
+        const numField = document.getElementById('id_numero');
+        const serieField = document.getElementById('id_serie');
+        const labelNum = document.getElementById('label_numero');
+        const labelSerie = document.getElementById('label_serie');
+        
+        if (tipoField.value === 'NOTA_FISCAL') {
+            numField.required = true;
+            serieField.required = true;
+            labelNum.innerText = "Número da Nota Fiscal";
+            labelSerie.innerText = "Série";
+        } else {
+            numField.required = false;
+            serieField.required = false;
+            if (tipoField.value === 'RECIBO') {
+                labelNum.innerText = "Número do Recibo (Opcional)";
+            } else if (tipoField.value === 'SEM_DOCUMENTO') {
+                labelNum.innerText = "Identificador (Opcional)";
+            } else {
+                labelNum.innerText = "Número do Documento (Opcional)";
+            }
+            labelSerie.innerText = "Série (Opcional)";
+        }
+    }
+    
+    // Executa na inicialização
+    document.addEventListener('DOMContentLoaded', function() {
+        toggleFiscaleRequirements();
+    });
+</script>
 {% endblock %}
