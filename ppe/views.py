@@ -121,8 +121,16 @@ class ProductVariantCreateView(LoginRequiredMixin, CreateView):
         if form.is_valid():
             variant = form.save(commit=False)
             variant.product = product
-            variant.save()
-            messages.success(request, f"Tamanho {variant.tamanho} adicionado com sucesso.")
+            
+            # Verifica se já existe um tamanho idêntico cadastrado
+            if ProductVariant.objects.filter(product=product, tamanho=variant.tamanho).exists():
+                messages.error(request, f"O tamanho '{variant.tamanho}' já está cadastrado para este produto.")
+            else:
+                try:
+                    variant.save()
+                    messages.success(request, f"Tamanho {variant.tamanho} adicionado com sucesso.")
+                except Exception as e:
+                    messages.error(request, f"Erro ao salvar tamanho: {str(e)}")
         else:
             messages.error(request, f"Erro ao adicionar variante: {form.errors.as_text()}")
         return redirect('product_detail', pk=product_id)

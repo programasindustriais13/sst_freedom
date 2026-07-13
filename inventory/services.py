@@ -215,10 +215,15 @@ def create_and_confirm_fiscal_note(fiscal_note, items_data, user):
             raise ValidationError("A quantidade dos itens deve ser maior que zero.")
         if custo_unitario < 0:
             raise ValidationError("O custo unitário não pode ser negativo.")
-        if not data_validade:
-            raise ValidationError("A data de validade é obrigatória.")
+
+        # Autogerar lote e validade se não fornecidos pelo Almoxarife
         if not identificador:
-            raise ValidationError("O lote do fabricante é obrigatório.")
+            import uuid
+            identificador = f"NF-{fiscal_note.numero or fiscal_note.id or 'SN'}-{uuid.uuid4().hex[:6].upper()}"
+
+        if not data_validade:
+            base_date = fiscal_note.data_recebimento or timezone.now().date()
+            data_validade = base_date + timezone.timedelta(days=365*5)
 
         try:
             product = Product.objects.get(id=product_id)

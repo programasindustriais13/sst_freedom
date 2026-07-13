@@ -154,7 +154,6 @@
                             <th class="text-muted border-0">Tamanho</th>
                             <th class="text-muted border-0">SKU / Código</th>
                             <th class="text-muted border-0 text-center">Estoque Mínimo</th>
-                            <th class="text-muted border-0 text-center">Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -163,17 +162,10 @@
                             <td class="text-light fw-bold">{{ var.tamanho }}</td>
                             <td>{{ var.sku|default:"-" }}</td>
                             <td class="text-center">{{ var.estoque_minimo }}</td>
-                            <td class="text-center">
-                                {% if var.ativo %}
-                                <span class="badge bg-success">Ativo</span>
-                                {% else %}
-                                <span class="badge bg-danger">Inativo</span>
-                                {% endif %}
-                            </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="4" class="text-center text-muted border-0 py-4">Nenhum tamanho cadastrado para este produto.</td>
+                            <td colspan="3" class="text-center text-muted border-0 py-4">Nenhum tamanho cadastrado para este produto.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
