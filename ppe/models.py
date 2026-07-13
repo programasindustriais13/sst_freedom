@@ -81,6 +81,13 @@ class CertificadoAprovacao(models.Model):
     fabricante = models.CharField(max_length=255, blank=True, null=True, verbose_name="Fabricante/Importador Oficial")
     cnpj = models.CharField(max_length=20, blank=True, null=True, verbose_name="CNPJ do Fabricante/Importador")
     natureza_protecao = models.TextField(blank=True, null=True, verbose_name="Natureza da Proteção")
+    grupo_protecao = models.CharField(max_length=255, blank=True, null=True, verbose_name="Grupo de Proteção")
+    processo = models.CharField(max_length=100, blank=True, null=True, verbose_name="Número do Processo")
+    natureza = models.CharField(max_length=100, blank=True, null=True, verbose_name="Natureza")
+    nome_fantasia = models.CharField(max_length=255, blank=True, null=True, verbose_name="Nome Fantasia")
+    cidade = models.CharField(max_length=100, blank=True, null=True, verbose_name="Cidade")
+    uf = models.CharField(max_length=10, blank=True, null=True, verbose_name="UF")
+    aprovado_para = models.TextField(blank=True, null=True, verbose_name="Aprovado Para")
     situacao = models.CharField(max_length=100, blank=True, null=True, verbose_name="Situação do C.A.")
     observacoes = models.TextField(blank=True, null=True, verbose_name="Restrições ou Observações")
     

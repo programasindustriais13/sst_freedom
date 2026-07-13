@@ -33,6 +33,15 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['title'] = "Novo Produto / EPI"
+        
+        ca_numero = None
+        if self.request.method == 'POST':
+            ca_numero = self.request.POST.get('ca_numero')
+            
+        if ca_numero:
+            num_norm = "".join([c for c in str(ca_numero) if c.isdigit()])
+            if num_norm:
+                context['ca_obj'] = CertificadoAprovacao.objects.filter(numero=num_norm).first()
         return context
 
 
@@ -45,6 +54,17 @@ class ProductUpdateView(LoginRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['title'] = f"Editar Produto: {self.object.nome}"
+        
+        ca_numero = None
+        if self.request.method == 'POST':
+            ca_numero = self.request.POST.get('ca_numero')
+        elif hasattr(self, 'object') and self.object:
+            ca_numero = self.object.ca_numero
+            
+        if ca_numero:
+            num_norm = "".join([c for c in str(ca_numero) if c.isdigit()])
+            if num_norm:
+                context['ca_obj'] = CertificadoAprovacao.objects.filter(numero=num_norm).first()
         return context
 
 
@@ -797,8 +817,10 @@ def ca_consultar_ajax(request):
         
     from .ca_services import ConsultaCAService
     
+    force = request.GET.get('force') == 'true'
+    
     try:
-        result = ConsultaCAService.get_or_query(q_clean)
+        result = ConsultaCAService.get_or_query(q_clean, force=force)
     except Exception as e:
         import logging
         logger = logging.getLogger('ppe.views')

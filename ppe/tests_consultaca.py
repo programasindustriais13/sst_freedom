@@ -245,3 +245,119 @@ class ConsultaCATestCase(TestCase):
         form_manual = ProductForm(data=form_data_manual)
         self.assertTrue(form_manual.is_valid())
         self.assertEqual(form_manual.cleaned_data['fabricante'], 'MANUAL FAB')
+
+    @patch('ppe.ca_services.ConsultaCAClient.get_html')
+    def test_new_fields_extracted_and_cached(self, mock_get_html):
+        mock_get_html.return_value = self.html_fixture_11223
+        res = ConsultaCAService.get_or_query("11223")
+        self.assertTrue(res['found'])
+        
+        # Verify cached CertificadoAprovacao has the new fields
+        ca_obj = CertificadoAprovacao.objects.get(numero="11223")
+        self.assertEqual(ca_obj.grupo_protecao, "Proteção Respiratória")
+        self.assertEqual(ca_obj.processo, "460000147930064")
+        self.assertEqual(ca_obj.natureza, "Nacional")
+        self.assertEqual(ca_obj.nome_fantasia, "PROT-CAP")
+        self.assertEqual(ca_obj.cidade, "GUARULHOS")
+        self.assertEqual(ca_obj.uf, "SP")
+        self.assertEqual(ca_obj.aprovado_para, "PROTEÇÃO RESPIRATÓRIA DO USUÁRIO EM AMBIENTES NÃO IMEDIATAMENTE PERIGOSOS.")
+        
+        # Verify returned dictionary has the fields too
+        self.assertEqual(res['grupo_protecao'], "Proteção Respiratória")
+        self.assertEqual(res['processo'], "460000147930064")
+        self.assertEqual(res['natureza'], "Nacional")
+        self.assertEqual(res['nome_fantasia'], "PROT-CAP")
+        self.assertEqual(res['cidade'], "GUARULHOS")
+        self.assertEqual(res['uf'], "SP")
+        self.assertEqual(res['aprovado_para'], "PROTEÇÃO RESPIRATÓRIA DO USUÁRIO EM AMBIENTES NÃO IMEDIATAMENTE PERIGOSOS.")
+
+    @patch('ppe.ca_services.ConsultaCAClient.get_html')
+    def test_force_query_parameter_ajax_view(self, mock_get_html):
+        mock_get_html.return_value = self.html_fixture_11223
+        
+        # First query caching CA
+        res = ConsultaCAService.get_or_query("11223")
+        self.assertEqual(mock_get_html.call_count, 1)
+        
+        # Querying again immediately (cache HIT, mock_get_html not called)
+        res = ConsultaCAService.get_or_query("11223")
+        self.assertEqual(mock_get_html.call_count, 1)
+        
+        # Querying with force=True (cache bypass, mock_get_html called again)
+        res = ConsultaCAService.get_or_query("11223", force=True)
+        self.assertEqual(mock_get_html.call_count, 2)
+        
+        # Authenticate and test the Ajax view with force=true query param
+        self.client.login(username="tecnico", password="pwd")
+        url = reverse('ca_consultar_ajax') + "?q=11223&force=true"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(mock_get_html.call_count, 3)
+
+    def test_view_context_contains_ca_obj(self):
+        # Authenticate SST tech
+        self.client.login(username="tecnico", password="pwd")
+        
+        # Create CA cached record
+        ca_obj = CertificadoAprovacao.objects.create(
+            numero="11223",
+            numero_exibicao="CA 11223",
+            fabricante="Bunzl",
+            situacao="VÁLIDO",
+            data_validade=datetime.date(2030, 1, 1),
+            status_verificacao="VERIFICADO_BASE_OFICIAL"
+        )
+        
+        # Test Create view GET with no ca_numero (context doesn't have ca_obj)
+        response = self.client.get(reverse('product_create'))
+        self.assertNotIn('ca_obj', response.context)
+        
+        # Create a product to edit
+        prod = Product.objects.create(
+            nome="Respirador Teste",
+            ca_numero="11223",
+            tipo_produto="EPI"
+        )
+        
+        # Test Edit view GET (context has ca_obj)
+        response = self.client.get(reverse('product_update', kwargs={'pk': prod.id}))
+        self.assertEqual(response.context['ca_obj'], ca_obj)
+        
+        # Test Create view POST with invalid form (re-rendering)
+        post_data = {
+            'nome': '', # invalid
+            'tipo_produto': 'EPI',
+            'ca_numero': '11223'
+        }
+        response = self.client.post(reverse('product_create'), data=post_data)
+        # Should re-render and contain ca_obj in context
+        self.assertEqual(response.context['ca_obj'], ca_obj)
+
+    @patch('ppe.ca_services.ConsultaCAService.get_or_query')
+    def test_backend_ignores_tampered_manufacturer_in_post(self, mock_get_or_query):
+        mock_get_or_query.return_value = {
+            'success': True,
+            'found': True,
+            'fabricante': 'OFFICIAL FABRICANTE',
+            'nome_fantasia': 'OFFICIAL FANTASIA',
+            'situacao': 'VÁLIDO',
+            'data_validade': '18/12/2030'
+        }
+        
+        # Post request trying to submit with blank manufacturer to let backend auto-fill
+        form_data = {
+            'nome': 'Novo Respirador Secundário',
+            'tipo_produto': 'EPI',
+            'categoria': 'PROTECAO_RESPIRATORIA',
+            'ca_numero': '11223',
+            'unidade_medida': 'UND',
+            'exige_ca': True,
+            'controlado_individualmente': True,
+            'ativo': True,
+            'fabricante': '' # empty to test auto-population
+        }
+        
+        form = ProductForm(data=form_data)
+        self.assertTrue(form.is_valid())
+        # It should auto-populate from the verified service/cache results
+        self.assertEqual(form.cleaned_data['fabricante'], 'OFFICIAL FANTASIA')

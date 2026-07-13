@@ -29,12 +29,22 @@ class ProductForm(forms.ModelForm):
                     from .ca_services import ConsultaCAService
                     result = ConsultaCAService.get_or_query(num_norm)
                     
-                    if result.get('success') and result.get('found'):
-                        # Não sobrescreve dados manuais preenchidos
-                        if not cleaned_data.get('fabricante'):
-                            cleaned_data['fabricante'] = result.get('fabricante')
+                    if result.get('success'):
+                        if result.get('found'):
+                            # Auto-preenche fabricante se estiver em branco, usando o nome oficial/fantasia
+                            if not cleaned_data.get('fabricante'):
+                                cleaned_data['fabricante'] = result.get('nome_fantasia') or result.get('fabricante')
+                        else:
+                            # Se não foi encontrado, mas o fluxo manual é permitido, o salvamento prossegue.
+                            # O registro correspondente em CertificadoAprovacao já terá status_verificacao='NAO_ENCONTRADO'.
+                            logger.info(f"CA {num_norm} não encontrado. Cadastro mantido como não confirmado pela consulta.")
+                    elif result.get('indisponivel'):
+                        # Se indisponível, permite salvar normalmente para não bloquear a operação
+                        logger.warning(f"ConsultaCA indisponível durante salvamento de EPI com CA {num_norm}. Salvamento permitido.")
                 except Exception as e:
                     logger.warning(f"Erro ao consultar/atualizar cache do CA no salvamento do formulário: {str(e)}")
+            else:
+                self.add_error('ca_numero', "Número do C.A. é obrigatório para produtos do tipo EPI.")
         else:
             # Se não for EPI, limpa o C.A. e categoria de proteção
             cleaned_data['ca_numero'] = None

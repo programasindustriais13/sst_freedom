@@ -220,7 +220,7 @@ class ConsultaCAService:
     Coordinates cache, database persistence and online queries.
     """
     @classmethod
-    def get_or_query(cls, ca_number):
+    def get_or_query(cls, ca_number, force=False):
         """
         Gets CA details. Checks DB cache first, then queries online if needed.
         Returns a dict of normalized fields.
@@ -238,7 +238,7 @@ class ConsultaCAService:
 
         # Check DB
         ca_obj = CertificadoAprovacao.objects.filter(numero=ca_norm).first()
-        if ca_obj:
+        if ca_obj and not force:
             age = (now - ca_obj.ultima_sincronizacao).total_seconds()
             
             # If not found CA cached
@@ -256,8 +256,8 @@ class ConsultaCAService:
                     logger.info(f"Cache HIT (positivo) para CA {ca_norm}.")
                     return cls._to_dict(ca_obj)
 
-        # Cache miss or expired: Query online
-        logger.info(f"Cache MISS para CA {ca_norm}. Iniciando consulta online.")
+        # Cache miss or expired or forced: Query online
+        logger.info(f"Cache MISS ou consulta forçada para CA {ca_norm}. Iniciando consulta online.")
         client = ConsultaCAClient()
         html = client.get_html(ca_norm)
 
@@ -308,6 +308,22 @@ class ConsultaCAService:
             except ValueError:
                 pass
 
+        # Split cidade_uf safely
+        cidade_uf = parsed.get('cidade_uf', '')
+        cidade = ''
+        uf = ''
+        if cidade_uf:
+            if '/' in cidade_uf:
+                parts = cidade_uf.split('/')
+                cidade = parts[0].strip()
+                uf = parts[1].strip()
+            elif '-' in cidade_uf:
+                parts = cidade_uf.split('-')
+                cidade = parts[0].strip()
+                uf = parts[1].strip()
+            else:
+                cidade = cidade_uf.strip()
+
         # Save to DB cache
         ca_obj, created = CertificadoAprovacao.objects.update_or_create(
             numero=ca_norm,
@@ -322,6 +338,13 @@ class ConsultaCAService:
                 'status_verificacao': 'VERIFICADO_BASE_OFICIAL',
                 'presente_na_fonte': True,
                 'fonte': 'ConsultaCA',
+                'grupo_protecao': parsed.get('grupo_protecao', '') or '',
+                'processo': parsed.get('processo', '') or '',
+                'natureza': parsed.get('natureza', '') or '',
+                'nome_fantasia': parsed.get('nome_fantasia', '') or '',
+                'cidade': cidade,
+                'uf': uf,
+                'aprovado_para': parsed.get('aprovado_para', '') or '',
             }
         )
 
@@ -342,4 +365,13 @@ class ConsultaCAService:
             'data_validade': ca_obj.data_validade.strftime('%d/%m/%Y') if ca_obj.data_validade and ca_obj.data_validade.year > 1900 else '',
             'presente_na_fonte': ca_obj.presente_na_fonte,
             'status_verificacao': ca_obj.get_status_verificacao_display(),
+            'grupo_protecao': ca_obj.grupo_protecao or '',
+            'processo': ca_obj.processo or '',
+            'natureza': ca_obj.natureza or '',
+            'nome_fantasia': ca_obj.nome_fantasia or '',
+            'cidade': ca_obj.cidade or '',
+            'uf': ca_obj.uf or '',
+            'aprovado_para': ca_obj.aprovado_para or '',
+            'fonte': ca_obj.fonte or '',
+            'ultima_sincronizacao': ca_obj.ultima_sincronizacao.strftime('%d/%m/%Y %H:%M:%S') if ca_obj.ultima_sincronizacao else '',
         }
