@@ -136,7 +136,11 @@
                     <tbody>
                         {% for func in functions %}
                         <tr>
-                            <td class="text-light border-secondary fw-semibold">{{ func.nome }}</td>
+                            <td class="text-light border-secondary fw-semibold">
+                                <a href="{% url 'function_detail' func.id %}" class="text-link fw-semibold text-decoration-none">
+                                    {{ func.nome }}
+                                </a>
+                            </td>
                             <td class="border-secondary text-truncate" style="max-width: 250px;">{{ func.descricao|default:"-" }}</td>
                         </tr>
                         {% empty %}

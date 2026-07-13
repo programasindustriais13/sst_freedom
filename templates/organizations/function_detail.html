@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Detalhes da Função: {{ function.nome }} - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'organization_dashboard' %}" class="text-primary text-decoration-none">Estrutura Organizacional</a></li>
+<li class="breadcrumb-item active text-secondary" aria-current="page">{{ function.nome }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <span class="text-secondary small text-uppercase fw-bold"><i class="bi bi-briefcase"></i> Função / Cargo</span>
+        <h1 class="mb-0">{{ function.nome }}</h1>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'organization_dashboard' %}" class="btn btn-outline-secondary btn-premium">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+        {% if request.user.is_tecnico or request.user.is_admin %}
+        <a href="{% url 'ppe_matrix_create' function.id %}" class="btn btn-premium btn-premium-primary">
+            <i class="bi bi-plus-lg"></i> Adicionar EPI à Matriz
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Informações da Função -->
+    <div class="col-12 col-lg-4">
+        <div class="card-premium h-100">
+            <h4 class="mb-3 text-primary"><i class="bi bi-info-circle"></i> Informações Gerais</h4>
+            
+            <div class="mb-3">
+                <label class="text-secondary small fw-semibold d-block">Descrição / Atribuições</label>
+                <div class="text-light fs-6 mt-1" style="white-space: pre-line;">
+                    {{ function.descricao|default:"Nenhuma descrição informada." }}
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="text-secondary small fw-semibold d-block">Empresa Vinculada</label>
+                <span class="text-light fw-medium">{{ function.company.razao_social }}</span>
+            </div>
+
+            <div class="mb-3">
+                <label class="text-secondary small fw-semibold d-block">Status</label>
+                {% if function.ativo %}
+                <span class="badge-premium badge-premium-success">Ativo</span>
+                {% else %}
+                <span class="badge-premium badge-premium-danger">Inativo</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Matriz de EPIs recomendados -->
+    <div class="col-12 col-lg-8">
+        <div class="card-premium h-100">
+            <h4 class="mb-3 text-info"><i class="bi bi-shield-check"></i> Matriz de EPIs Recomendados</h4>
+            
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-default);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0" style="font-size: 0.72rem;">EPI / Material</th>
+                            <th class="text-muted border-0 text-center" style="font-size: 0.72rem;">Tipo</th>
+                            <th class="text-muted border-0 text-center" style="font-size: 0.72rem;">Obrigatoriedade</th>
+                            <th class="text-muted border-0 text-center" style="font-size: 0.72rem;">Qtd Padrão</th>
+                            <th class="text-muted border-0 text-center" style="font-size: 0.72rem;">Vida Útil</th>
+                            <th class="text-muted border-0 text-center" style="font-size: 0.72rem;">Status</th>
+                            {% if request.user.is_tecnico or request.user.is_admin %}
+                            <th class="text-muted border-0 text-center" style="font-size: 0.72rem;">Ações</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in matrix_entries %}
+                        <tr class="{% if not entry.ativo %}opacity-50{% endif %}">
+                            <td class="text-light fw-semibold align-middle">
+                                {{ entry.product.nome }}
+                                {% if entry.variant %}
+                                <br><small class="text-secondary fw-normal">Tamanho: {{ entry.variant.tamanho }}</small>
+                                {% endif %}
+                                {% if entry.product.ca_numero %}
+                                <br><span class="badge bg-secondary text-secondary py-0 px-1" style="font-size: 0.68rem; background-color: rgba(255,255,255,0.06); border: 1px solid var(--border-default);">C.A. {{ entry.product.ca_numero }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center align-middle">
+                                {% if entry.principal %}
+                                <span class="badge-premium badge-premium-brand py-0">Principal</span>
+                                {% else %}
+                                <span class="badge-premium badge-premium-info py-0">Secundário</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center align-middle">
+                                {% if entry.obrigatorio %}
+                                <span class="badge bg-danger py-0 px-2" style="font-size: 0.75rem;">Obrigatório</span>
+                                {% else %}
+                                <span class="badge bg-secondary py-0 px-2" style="font-size: 0.75rem;">Opcional</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center align-middle fw-medium">{{ entry.quantidade_padrao }}</td>
+                            <td class="text-center align-middle fw-medium">{{ entry.vida_util_dias }} dias</td>
+                            <td class="text-center align-middle">
+                                {% if entry.ativo %}
+                                <span class="badge-premium badge-premium-success py-0">Ativo</span>
+                                {% else %}
+                                <span class="badge-premium badge-premium-danger py-0">Inativo</span>
+                                {% endif %}
+                            </td>
+                            {% if request.user.is_tecnico or request.user.is_admin %}
+                            <td class="text-center align-middle">
+                                <div class="d-flex justify-content-center align-items-center gap-1">
+                                    <a href="{% url 'ppe_matrix_update' entry.id %}" class="btn btn-sm btn-outline-primary btn-premium py-0 px-2" title="Editar configurações">
+                                        Editar
+                                    </a>
+                                    <form method="post" action="{% url 'ppe_matrix_toggle_active' entry.id %}" class="d-inline">
+                                        {% csrf_token %}
+                                        {% if entry.ativo %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger btn-premium py-0 px-2" title="Desativar recomendação">
+                                            Desativar
+                                        </button>
+                                        {% else %}
+                                        <button type="submit" class="btn btn-sm btn-outline-success btn-premium py-0 px-2" title="Ativar recomendação">
+                                            Ativar
+                                        </button>
+                                        {% endif %}
+                                    </form>
+                                </div>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="{% if request.user.is_tecnico or request.user.is_admin %}7{% else %}6{% endif %}" class="text-center text-muted border-0 py-5">
+                                <i class="bi bi-shield-slash fs-2 d-block mb-2 text-secondary"></i>
+                                Nenhum EPI configurado na matriz de recomendação para esta função.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

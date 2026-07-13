@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Excluir Matriz de EPI: {{ funcao.nome }} - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'matrix_list' %}" class="text-primary text-decoration-none">Matrizes de EPI</a></li>
+<li class="breadcrumb-item active text-secondary" aria-current="page">Confirmar Exclusão</li>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+        <div class="card-premium border-danger">
+            <div class="text-center mb-4">
+                <i class="bi bi-exclamation-triangle-fill text-danger fs-1"></i>
+                <h3 class="mt-2 text-danger">Confirmar Exclusão da Matriz</h3>
+                <p class="text-secondary small">Esta ação removerá permanentemente todas as recomendações de EPI configuradas para esta função.</p>
+            </div>
+            
+            <div class="p-3 mb-4 rounded border" style="background: rgba(231, 76, 60, 0.05); border-color: rgba(231, 76, 60, 0.2) !important;">
+                <label class="text-secondary small fw-bold">Função / Cargo Afetado</label>
+                <h4 class="text-light fw-bold mb-3">{{ funcao.nome }}</h4>
+                
+                <label class="text-secondary small fw-bold">EPIs que serão removidos da matriz:</label>
+                <ul class="text-light mt-1 mb-0 ps-3">
+                    {% for entry in entries %}
+                    <li>
+                        <strong>{{ entry.product.nome }}</strong>
+                        {% if entry.variant %} (Tamanho: {{ entry.variant.tamanho }}){% endif %}
+                        {% if not entry.ativo %}<span class="text-muted text-decoration-line-through small"> (Inativo)</span>{% endif %}
+                    </li>
+                    {% empty %}
+                    <li class="text-muted">Nenhum EPI associado atualmente.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <form method="post" action="{% url 'matrix_bulk_delete' funcao.id %}">
+                {% csrf_token %}
+                <p class="text-secondary small text-center mb-4">
+                    Tem certeza de que deseja prosseguir? Esta operação é irreversível no banco de dados operacional.
+                </p>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-premium btn-premium-danger w-100">
+                        <i class="bi bi-trash-fill me-2"></i> Sim, Excluir Matriz
+                    </button>
+                    <a href="{% url 'matrix_list' %}" class="btn btn-outline-secondary btn-premium w-100 text-center">
+                        Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

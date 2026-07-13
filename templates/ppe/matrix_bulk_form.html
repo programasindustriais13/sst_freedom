@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'matrix_list' %}" class="text-primary text-decoration-none">Matrizes de EPI</a></li>
+<li class="breadcrumb-item active text-secondary" aria-current="page">{{ title }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-xl-10">
+        <div class="card-premium card-primary">
+            <h3 class="mb-4 text-primary"><i class="bi bi-shield-check"></i> {{ title }}</h3>
+            
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <div class="row g-4">
+                    <!-- Seleção da Função -->
+                    <div class="col-12">
+                        <label for="{{ form.funcao.id_for_label }}" class="form-label text-secondary fw-semibold">
+                            {{ form.funcao.label }}
+                        </label>
+                        {% if is_create %}
+                            {{ form.funcao }}
+                            <div class="form-text text-muted">Selecione a função operacional que receberá as recomendações.</div>
+                        {% else %}
+                            <!-- Na edição, a função vem preenchida e bloqueada -->
+                            <input type="text" class="form-control form-control-premium" value="{{ funcao.nome }}" disabled>
+                            <input type="hidden" name="funcao" value="{{ funcao.id }}">
+                            <div class="form-text text-muted">A função não pode ser alterada durante a edição da matriz.</div>
+                        {% endif %}
+                        {% if form.funcao.errors %}
+                        <div class="invalid-feedback d-block">{{ form.funcao.errors|join:", " }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Configurações Padrão dos EPIs -->
+                    <div class="col-12">
+                        <div class="p-3 rounded border border-secondary" style="background: rgba(255,255,255,0.02); border-color: var(--border-default) !important;">
+                            <h5 class="text-light mb-3"><i class="bi bi-sliders"></i> Parâmetros Gerais para os Itens Selecionados</h5>
+                            <p class="text-secondary small">Esses parâmetros serão aplicados aos novos EPIs associados à matriz.</p>
+                            
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6">
+                                    <label for="{{ form.quantidade_padrao.id_for_label }}" class="form-label text-secondary small fw-semibold">
+                                        {{ form.quantidade_padrao.label }}
+                                    </label>
+                                    {{ form.quantidade_padrao }}
+                                    {% if form.quantidade_padrao.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.quantidade_padrao.errors|join:", " }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label for="{{ form.vida_util_dias.id_for_label }}" class="form-label text-secondary small fw-semibold">
+                                        {{ form.vida_util_dias.label }}
+                                    </label>
+                                    {{ form.vida_util_dias }}
+                                    {% if form.vida_util_dias.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.vida_util_dias.errors|join:", " }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <div class="form-check form-switch pt-2">
+                                        {{ form.obrigatorio }}
+                                        <label class="form-check-label text-secondary small fw-semibold" for="{{ form.obrigatorio.id_for_label }}">
+                                            {{ form.obrigatorio.label }}
+                                        </label>
+                                    </div>
+                                    {% if form.obrigatorio.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.obrigatorio.errors|join:", " }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <div class="form-check form-switch pt-2">
+                                        {{ form.principal }}
+                                        <label class="form-check-label text-secondary small fw-semibold" for="{{ form.principal.id_for_label }}">
+                                            {{ form.principal.label }}
+                                        </label>
+                                    </div>
+                                    {% if form.principal.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.principal.errors|join:", " }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12">
+                                    <label for="{{ form.orientacoes.id_for_label }}" class="form-label text-secondary small fw-semibold">
+                                        {{ form.orientacoes.label }}
+                                    </label>
+                                    {{ form.orientacoes }}
+                                    {% if form.orientacoes.errors %}
+                                    <div class="invalid-feedback d-block">{{ form.orientacoes.errors|join:", " }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Seleção dos EPIs (Checkbox Select Multiple com Grid Responsivo) -->
+                    <div class="col-12">
+                        <label class="form-label text-secondary fw-semibold d-block">
+                            {{ form.products.label }}
+                        </label>
+                        <p class="text-secondary small">Marque os EPIs que fazem parte da matriz da função. Itens desmarcados na edição serão desativados.</p>
+                        
+                        <div class="p-3 rounded border" style="background: rgba(255,255,255,0.01); border-color: var(--border-default) !important; max-height: 400px; overflow-y: auto;">
+                            <div class="row">
+                                {% for checkbox in form.products %}
+                                <div class="col-12 col-md-6 col-lg-4 mb-2">
+                                    <div class="form-check">
+                                        {{ checkbox.tag }}
+                                        <label class="form-check-label text-light fw-medium" for="{{ checkbox.id_for_label }}">
+                                            {{ checkbox.choice_label }}
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% if form.products.errors %}
+                        <div class="invalid-feedback d-block mt-2">{{ form.products.errors|join:", " }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Ações -->
+                <div class="d-flex gap-2 mt-4 pt-3 border-top" style="border-color: var(--border-default) !important;">
+                    <button type="submit" class="btn btn-premium btn-premium-primary px-4">
+                        <i class="bi bi-check-lg me-2"></i> Salvar Matriz
+                    </button>
+                    {% if is_create %}
+                    <a href="{% url 'matrix_list' %}" class="btn btn-outline-secondary btn-premium px-4">
+                        Cancelar
+                    </a>
+                    {% else %}
+                    <a href="{% url 'function_detail' funcao.id %}" class="btn btn-outline-secondary btn-premium px-4">
+                        Cancelar
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

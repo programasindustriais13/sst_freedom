@@ -1,6 +1,6 @@
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.views.generic import ListView, CreateView, UpdateView, TemplateView
+from django.views.generic import ListView, CreateView, UpdateView, TemplateView, DetailView
 from django.urls import reverse_lazy
 from django.core.exceptions import PermissionDenied
 from .models import Company, Unit, Sector, CostCenter, Function, InventoryLocation
@@ -121,3 +121,16 @@ class InventoryLocationCreateView(LoginRequiredMixin, CreateView):
         context = super().get_context_data(**kwargs)
         context['title'] = "Novo Local de Estoque"
         return context
+
+
+class FunctionDetailView(LoginRequiredMixin, DetailView):
+    model = Function
+    template_name = "organizations/function_detail.html"
+    context_object_name = "function"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from ppe.models import PPEMatrix
+        context['matrix_entries'] = PPEMatrix.objects.filter(funcao=self.object).select_related('product', 'variant').order_by('product__nome')
+        return context
+

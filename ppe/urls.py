@@ -2,7 +2,9 @@ from django.urls import path
 from .views import (
     ProductListView, ProductCreateView, ProductUpdateView, ProductDetailView, ProductVariantCreateView,
     CertificadoAprovacaoListView, CertificadoAprovacaoCreateView, PPEDeliveryListView,
-    PPEDeliveryCreateView, delivery_sign_view, product_search_ajax, product_add_ajax
+    PPEDeliveryCreateView, delivery_sign_view, product_search_ajax, product_add_ajax,
+    PPEMatrixCreateView, PPEMatrixUpdateView, ppe_matrix_toggle_active,
+    PPEMatrixListView, PPEMatrixBulkCreateView, PPEMatrixBulkUpdateView, PPEMatrixBulkDeleteView
 )
 
 urlpatterns = [
@@ -21,4 +23,16 @@ urlpatterns = [
     
     path('add/ajax/', product_add_ajax, name='product_add_ajax'),
     path('search_ajax/', product_search_ajax, name='product_search_ajax'),
+    
+    path('matrix/add/<int:function_pk>/', PPEMatrixCreateView.as_view(), name='ppe_matrix_create'),
+    path('matrix/<int:pk>/edit/', PPEMatrixUpdateView.as_view(), name='ppe_matrix_update'),
+    path('matrix/<int:pk>/toggle/', ppe_matrix_toggle_active, name='ppe_matrix_toggle_active'),
+    
+    # Novas rotas da interface própria/bulk
+    path('matrices/', PPEMatrixListView.as_view(), name='matrix_list'),
+    path('matrices/add/', PPEMatrixBulkCreateView.as_view(), name='matrix_bulk_create'),
+    path('matrices/function/<int:function_pk>/edit/', PPEMatrixBulkUpdateView.as_view(), name='matrix_bulk_update'),
+    path('matrices/function/<int:function_pk>/delete/', PPEMatrixBulkDeleteView.as_view(), name='matrix_bulk_delete'),
 ]
+
+

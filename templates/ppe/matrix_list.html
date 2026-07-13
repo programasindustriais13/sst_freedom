@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Matrizes de EPI por Função - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item active text-secondary" aria-current="page">Matrizes de EPI</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="mb-0">Matrizes de EPI por Função</h1>
+        <p class="text-secondary small mb-0">Gerencie os equipamentos recomendados por função operacional na empresa</p>
+    </div>
+    {% if request.user.is_tecnico or request.user.is_admin %}
+    <a href="{% url 'matrix_bulk_create' %}" class="btn btn-premium btn-premium-primary">
+        <i class="bi bi-plus-lg"></i> Nova Matriz
+    </a>
+    {% endif %}
+</div>
+
+<!-- Filtros e Busca -->
+<div class="card-premium mb-4">
+    <form method="get" action="{% url 'matrix_list' %}" class="row g-3 align-items-end">
+        <div class="col-12 col-md-5">
+            <label for="search-input" class="form-label text-secondary small fw-semibold">Buscar Função</label>
+            <input type="text" name="q" id="search-input" class="form-control form-control-premium" placeholder="Ex: Eletricista, Motorista..." value="{{ q }}">
+        </div>
+        <div class="col-12 col-md-4">
+            <label for="company-select" class="form-label text-secondary small fw-semibold">Empresa / Contexto</label>
+            <select name="company" id="company-select" class="form-select form-control-premium">
+                <option value="">Todas as Empresas</option>
+                {% for company in companies %}
+                <option value="{{ company.id }}" {% if selected_company == company.id|stringformat:"s" %}selected{% endif %}>{{ company.nome_fantasia|default:company.razao_social }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-12 col-md-3 d-flex gap-2">
+            <button type="submit" class="btn btn-premium btn-premium-primary w-100">
+                <i class="bi bi-search"></i> Filtrar
+            </button>
+            <a href="{% url 'matrix_list' %}" class="btn btn-outline-secondary btn-premium w-100">
+                Limpar
+            </a>
+        </div>
+    </form>
+</div>
+
+<!-- Tabela de Listagem -->
+<div class="card-premium">
+    <div class="table-responsive">
+        <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-default);">
+            <thead>
+                <tr>
+                    <th class="text-muted border-0" style="font-size: 0.72rem;">Função / Cargo</th>
+                    <th class="text-muted border-0" style="font-size: 0.72rem;">Empresa</th>
+                    <th class="text-muted border-0" style="font-size: 0.72rem;">EPIs Recomendados</th>
+                    <th class="text-muted border-0 text-center" style="font-size: 0.72rem;">Qtd EPIs</th>
+                    <th class="text-muted border-0 text-center" style="font-size: 0.72rem;">Status Cargo</th>
+                    <th class="text-muted border-0 text-center" style="font-size: 0.72rem;">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for func in functions %}
+                <tr>
+                    <td class="text-light fw-semibold align-middle">
+                        <a href="{% url 'function_detail' func.id %}" class="text-link text-decoration-none fw-bold">
+                            {{ func.nome }}
+                        </a>
+                    </td>
+                    <td class="align-middle text-secondary small">
+                        {{ func.company.nome_fantasia|default:func.company.razao_social }}
+                    </td>
+                    <td class="align-middle" style="max-width: 320px;">
+                        {% for entry in func.ppe_matrix_entries.all %}
+                            {% if entry.ativo %}
+                            <span class="badge-premium badge-premium-info me-1 mb-1 d-inline-block py-0" style="font-size: 0.72rem;">
+                                {{ entry.product.nome }}
+                            </span>
+                            {% else %}
+                            <span class="badge-premium badge-premium-danger me-1 mb-1 d-inline-block py-0 text-decoration-line-through" style="font-size: 0.72rem; opacity: 0.45;" title="Recomendação Inativa">
+                                {{ entry.product.nome }}
+                            </span>
+                            {% endif %}
+                        {% empty %}
+                        <span class="text-muted small">Sem EPIs associados</span>
+                        {% endfor %}
+                    </td>
+                    <td class="text-center align-middle fw-medium">
+                        {{ func.ppe_matrix_entries.all|length }}
+                    </td>
+                    <td class="text-center align-middle">
+                        {% if func.ativo %}
+                        <span class="badge-premium badge-premium-success py-0" style="font-size: 0.75rem;">Ativo</span>
+                        {% else %}
+                        <span class="badge-premium badge-premium-danger py-0" style="font-size: 0.75rem;">Inativo</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center align-middle">
+                        <div class="d-flex justify-content-center align-items-center gap-1">
+                            <a href="{% url 'function_detail' func.id %}" class="btn btn-sm btn-outline-primary btn-premium py-0 px-2" title="Visualizar Detalhes">
+                                <i class="bi bi-eye"></i> Visualizar
+                            </a>
+                            {% if request.user.is_tecnico or request.user.is_admin %}
+                            <a href="{% url 'matrix_bulk_update' func.id %}" class="btn btn-sm btn-outline-primary btn-premium py-0 px-2" title="Editar Matriz">
+                                <i class="bi bi-pencil"></i> Editar
+                            </a>
+                            <a href="{% url 'matrix_bulk_delete' func.id %}" class="btn btn-sm btn-outline-danger btn-premium py-0 px-2" title="Excluir Matriz">
+                                <i class="bi bi-trash"></i> Excluir
+                            </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted border-0 py-5">
+                        <i class="bi bi-shield-slash fs-1 d-block mb-3 text-secondary"></i>
+                        Nenhuma matriz de EPI por função encontrada.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Paginação -->
+    {% if is_paginated %}
+    <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top" style="border-color: var(--border-default) !important;">
+        <span class="text-secondary small">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <nav aria-label="Navegação de página">
+            <ul class="pagination mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link page-link-premium" href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if selected_company %}&company={{ selected_company }}{% endif %}" aria-label="Anterior">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link page-link-premium">&laquo;</span>
+                </li>
+                {% endif %}
+                
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                    <li class="page-item active">
+                        <span class="page-link page-link-premium">{{ num }}</span>
+                    </li>
+                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link page-link-premium" href="?page={{ num }}{% if q %}&q={{ q }}{% endif %}{% if selected_company %}&company={{ selected_company }}{% endif %}">{{ num }}</a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link page-link-premium" href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if selected_company %}&company={{ selected_company }}{% endif %}" aria-label="Próximo">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link page-link-premium">&raquo;</span>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
