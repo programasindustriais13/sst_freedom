@@ -11,13 +11,30 @@ class ProductForm(forms.ModelForm):
         ]
 
     def clean(self):
+        import logging
+        logger = logging.getLogger('ppe.forms')
+        
         cleaned_data = super().clean()
         tipo_produto = cleaned_data.get('tipo_produto')
         ca_numero = cleaned_data.get('ca_numero')
 
         if tipo_produto == 'EPI':
-            # Validação opcional de C.A., mas mostraremos aviso no template se estiver vazio
-            pass
+            if ca_numero:
+                # Normaliza o número do CA (apenas dígitos)
+                num_norm = "".join([c for c in str(ca_numero) if c.isdigit()])
+                cleaned_data['ca_numero'] = num_norm
+                
+                # Tenta obter ou consultar do ConsultaCA no backend para persistir snapshot
+                try:
+                    from .ca_services import ConsultaCAService
+                    result = ConsultaCAService.get_or_query(num_norm)
+                    
+                    if result.get('success') and result.get('found'):
+                        # Não sobrescreve dados manuais preenchidos
+                        if not cleaned_data.get('fabricante'):
+                            cleaned_data['fabricante'] = result.get('fabricante')
+                except Exception as e:
+                    logger.warning(f"Erro ao consultar/atualizar cache do CA no salvamento do formulário: {str(e)}")
         else:
             # Se não for EPI, limpa o C.A. e categoria de proteção
             cleaned_data['ca_numero'] = None

@@ -217,6 +217,7 @@
                     <div class="mb-3" id="modal_ca_container">
                         <label for="modal_ca_numero" class="form-label fw-semibold">C.A. — Certificado de Aprovação</label>
                         <input type="text" id="modal_ca_numero" class="form-control form-control-premium" placeholder="ex: 18731 ou CA 18731">
+                        <div id="modal_ca_feedback" class="mt-2 p-3 rounded-3 border" style="display: none; background-color: rgba(255, 255, 255, 0.03); border-color: rgba(255,255,255,0.1);"></div>
                     </div>
                     <div class="row g-2 mb-3">
                         <div class="col-6">
@@ -467,6 +468,13 @@
         document.getElementById('new-product-form').reset();
         document.getElementById('modal-error').classList.add('d-none');
         document.getElementById('duplicity-alert').classList.add('d-none');
+        
+        const feedbackDiv = document.getElementById('modal_ca_feedback');
+        if (feedbackDiv) {
+            feedbackDiv.style.display = 'none';
+            feedbackDiv.innerHTML = '';
+        }
+        
         toggleModalCARequirement();
         
         const modal = new bootstrap.Modal(document.getElementById('newProductModal'));
@@ -644,6 +652,73 @@
     document.addEventListener('DOMContentLoaded', function() {
         toggleFiscaleRequirements();
         toggleModalCARequirement();
+        
+        // Inicializa consulta dinâmica de CA no modal
+        const modalCaField = document.getElementById('modal_ca_numero');
+        const modalCaFeedback = document.getElementById('modal_ca_feedback');
+        const modalFabricanteField = document.getElementById('modal_fabricante');
+        
+        let debounceTimeout;
+        if (modalCaField) {
+            modalCaField.addEventListener('input', function() {
+                clearTimeout(debounceTimeout);
+                const caVal = modalCaField.value.trim();
+                if (!caVal) {
+                    if (modalCaFeedback) modalCaFeedback.style.display = 'none';
+                    return;
+                }
+                debounceTimeout = setTimeout(() => {
+                    consultarCAModal(caVal);
+                }, 500);
+            });
+        }
+        
+        function consultarCAModal(caVal) {
+            if (!modalCaFeedback) return;
+            modalCaFeedback.style.display = 'block';
+            modalCaFeedback.innerHTML = '<div class="text-muted"><i class="bi bi-hourglass-split spinner-border spinner-border-sm me-2"></i>Consultando base local...</div>';
+            
+            fetch(`/ppe/ca/consultar_ajax/?q=${encodeURIComponent(caVal)}`)
+                .then(response => {
+                    if (!response.ok) throw new Error('Erro na requisição');
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success && data.found) {
+                        let badgeClass = 'bg-secondary';
+                        const sit = (data.situacao || '').toUpperCase();
+                        if (sit === 'VÁLIDO') badgeClass = 'bg-success';
+                        else if (sit === 'VENCIDO') badgeClass = 'bg-danger';
+                        else if (sit === 'CANCELADO' || sit === 'SUSPENSO') badgeClass = 'bg-warning text-dark';
+                        
+                        modalCaFeedback.innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="fw-bold text-light" style="font-size: 0.85rem;"><i class="bi bi-check-circle-fill text-success me-2"></i>CA ${data.numero}</span>
+                                <span class="badge ${badgeClass}" style="font-size: 0.7rem;">${data.situacao}</span>
+                            </div>
+                            <div class="text-secondary small" style="font-size: 0.78rem;"><strong>Fabricante:</strong> ${data.fabricante}</div>
+                            <div class="text-secondary small" style="font-size: 0.78rem;"><strong>Validade MTE:</strong> ${data.data_validade}</div>
+                        `;
+                        modalCaFeedback.style.borderColor = 'rgba(25, 135, 84, 0.4)';
+                        
+                        if (modalFabricanteField && (!modalFabricanteField.value || modalFabricanteField.value.trim() === '')) {
+                            modalFabricanteField.value = data.fabricante;
+                        }
+                    } else {
+                        modalCaFeedback.innerHTML = `
+                            <div class="text-warning small mb-1" style="font-size: 0.78rem;">
+                                <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                                CA não encontrado na base local do MTE.
+                            </div>
+                        `;
+                        modalCaFeedback.style.borderColor = 'rgba(255, 193, 7, 0.4)';
+                    }
+                })
+                .catch(err => {
+                    modalCaFeedback.innerHTML = `<div class="text-danger small" style="font-size: 0.78rem;"><i class="bi bi-x-circle-fill me-1"></i>Erro de conexão.</div>`;
+                });
+        }
+        
         // Inicializa com 1 linha vazia para facilitar a digitação do usuário
         addItemRow();
     });

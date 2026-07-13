@@ -151,3 +151,11 @@ LOGOUT_REDIRECT_URL = 'login'
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# ConsultaCA Integration Settings
+CONSULTACA_ENABLED = os.environ.get("CONSULTACA_ENABLED", "True").lower() == "true"
+CONSULTACA_BASE_URL = os.environ.get("CONSULTACA_BASE_URL", "https://consultaca.com").rstrip("/")
+CONSULTACA_CONNECT_TIMEOUT = int(os.environ.get("CONSULTACA_CONNECT_TIMEOUT", "3"))
+CONSULTACA_READ_TIMEOUT = int(os.environ.get("CONSULTACA_READ_TIMEOUT", "5"))
+CONSULTACA_CACHE_TIMEOUT = int(os.environ.get("CONSULTACA_CACHE_TIMEOUT", "86400"))
+CONSULTACA_NOT_FOUND_CACHE_TIMEOUT = int(os.environ.get("CONSULTACA_NOT_FOUND_CACHE_TIMEOUT", "3600"))
+CONSULTACA_MAX_RESPONSE_BYTES = int(os.environ.get("CONSULTACA_MAX_RESPONSE_BYTES", "1048576"))

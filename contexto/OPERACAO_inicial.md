@@ -39,12 +39,25 @@ Toda unidade de trabalho deve possuir, no mínimo, dois locais físicos cadastra
    - Para Almoxarifes: Atribua o perfil **Almoxarife** e selecione as unidades permitidas para gerenciamento físico de estoque.
    - Para Técnicos SST: Atribua o perfil **Técnico SST** e selecione as unidades permitidas para gestão ocupacional e entrega de EPIs.
 
-### Passo 6: Importação da Base Oficial de C.A. (MTE)
-Para sincronizar a base oficial de Certificados de Aprovação (CAEPI) disponibilizada pelo Ministério do Trabalho e Emprego:
+### Passo 6: Sincronização da Base Oficial de C.A. (MTE)
+Para sincronizar ou atualizar a base oficial de Certificados de Aprovação (CAEPI) disponibilizada pelo Ministério do Trabalho e Emprego de forma automática:
 ```bash
-python manage.py sync_caepi --file fontes/base_caepi.xlsx
+# Executa a sincronização baixando automaticamente o ZIP mais recente via FTP/HTTP oficial do MTE
+.venv\Scripts\python.exe manage.py sync_caepi
+
+# Executa importando a partir de um arquivo local (ZIP ou TXT)
+.venv\Scripts\python.exe manage.py sync_caepi --arquivo fontes/tgg_export_caepi.zip
+
+# Simula a sincronização (gera estatísticas e validação estrutural sem alterar o banco)
+.venv\Scripts\python.exe manage.py sync_caepi --dry-run
+
+# Força o reprocessamento mesmo se o hash do arquivo coincidir com a última execução concluída
+.venv\Scripts\python.exe manage.py sync_caepi --forcar
+
+# Exibe logs detalhados do processamento de linhas e lotes no terminal
+.venv\Scripts\python.exe manage.py sync_caepi --verbose
 ```
-*(Substitua pelo caminho correto do arquivo oficial fornecido pelo MTE).*
+*Observação: A rotina é segura contra concorrência por Locks e conta com proteção atômica e verificação de integridade estrutural (impede importação se houver mais de 10% de erros ou queda superior a 20% no total de registros).*
 
 ---
 

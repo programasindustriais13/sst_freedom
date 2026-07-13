@@ -1,0 +1,238 @@
+{% extends "organizations/form.html" %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const tipoField = document.getElementById('id_tipo_produto');
+        const caField = document.getElementById('id_ca_numero');
+        const catField = document.getElementById('id_categoria');
+        const fabricanteField = document.getElementById('id_fabricante');
+        
+        if (tipoField && caField) {
+            const caContainer = caField.closest('.mb-3');
+            const catContainer = catField ? catField.closest('.mb-3') : null;
+            const exigeCaField = document.getElementById('id_exige_ca');
+            const exigeCaContainer = exigeCaField ? exigeCaField.closest('.mb-3') : null;
+            
+            // Create feedback container if not exists
+            let feedbackDiv = document.getElementById('ca_status_feedback');
+            if (!feedbackDiv) {
+                feedbackDiv = document.createElement('div');
+                feedbackDiv.id = 'ca_status_feedback';
+                feedbackDiv.className = 'mt-3 p-3 rounded-3 border';
+                feedbackDiv.style.display = 'none';
+                feedbackDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.02)';
+                feedbackDiv.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                feedbackDiv.setAttribute('aria-live', 'polite');
+                caField.parentNode.appendChild(feedbackDiv);
+            }
+            
+            let lastConsultedCA = "";
+            let isQuerying = false;
+            let debounceTimeout;
+            
+            function toggleFields() {
+                if (tipoField.value === 'EPI') {
+                    if (caContainer) caContainer.style.display = 'block';
+                    if (catContainer) catContainer.style.display = 'block';
+                    if (exigeCaContainer) exigeCaContainer.style.display = 'block';
+                    const caVal = caField.value.trim();
+                    if (caVal) {
+                        consultarCA(caVal);
+                    }
+                } else {
+                    if (caContainer) caContainer.style.display = 'none';
+                    if (catContainer) catContainer.style.display = 'none';
+                    if (exigeCaContainer) exigeCaContainer.style.display = 'none';
+                    caField.value = '';
+                    feedbackDiv.style.display = 'none';
+                    lastConsultedCA = "";
+                }
+            }
+            
+            // Trigger query on inputs (with debounce)
+            caField.addEventListener('input', function() {
+                clearTimeout(debounceTimeout);
+                const caVal = caField.value.trim();
+                const cleanCA = caVal.replace(/\D/g, '');
+                
+                if (!cleanCA) {
+                    feedbackDiv.style.display = 'none';
+                    lastConsultedCA = "";
+                    return;
+                }
+                
+                if (cleanCA === lastConsultedCA) {
+                    return; // Skip if same CA
+                }
+                
+                debounceTimeout = setTimeout(() => {
+                    consultarCA(caVal);
+                }, 800); // 800ms debounce
+            });
+            
+            // Trigger query on blur (instant if changed)
+            caField.addEventListener('blur', function() {
+                const caVal = caField.value.trim();
+                const cleanCA = caVal.replace(/\D/g, '');
+                if (cleanCA && cleanCA !== lastConsultedCA && !isQuerying) {
+                    clearTimeout(debounceTimeout);
+                    consultarCA(caVal);
+                }
+            });
+            
+            function consultarCA(caVal) {
+                const cleanCA = caVal.replace(/\D/g, '');
+                if (!cleanCA) {
+                    feedbackDiv.style.display = 'none';
+                    return;
+                }
+                
+                if (isQuerying) {
+                    return; // Prevent multiple overlapping requests
+                }
+                
+                isQuerying = true;
+                lastConsultedCA = cleanCA;
+                
+                feedbackDiv.style.display = 'block';
+                feedbackDiv.className = 'mt-3 p-3 rounded-3 border border-secondary text-light';
+                feedbackDiv.innerHTML = `
+                    <div class="d-flex align-items-center gap-2 text-muted">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                        <span class="fw-semibold">Consultando CA ${cleanCA} no ConsultaCA...</span>
+                    </div>
+                `;
+                
+                fetch(`/ppe/ca/consultar_ajax/?q=${encodeURIComponent(cleanCA)}`)
+                    .then(response => {
+                        if (response.status === 401 || response.status === 403) {
+                            throw new Error('Sessão expirada ou sem permissão.');
+                        }
+                        if (!response.ok) {
+                            return response.json().then(errData => {
+                                throw new Error(errData.error || 'Erro inesperado na consulta.');
+                            });
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        isQuerying = false;
+                        if (data.success && data.found) {
+                            // Map states to color signals
+                            const sit = (data.situacao || '').toUpperCase();
+                            let badgeClass = 'bg-secondary';
+                            let borderClass = 'border-info';
+                            let icon = '<i class="bi bi-info-circle-fill text-info me-2"></i>';
+                            
+                            if (sit === 'VÁLIDO') {
+                                badgeClass = 'bg-success text-white';
+                                borderClass = 'border-success';
+                                icon = '<i class="bi bi-check-circle-fill text-success me-2"></i>';
+                            } else if (sit === 'VENCIDO') {
+                                badgeClass = 'bg-danger text-white';
+                                borderClass = 'border-danger';
+                                icon = '<i class="bi bi-x-circle-fill text-danger me-2"></i>';
+                            } else if (sit === 'CANCELADO' || sit === 'SUSPENSO' || sit === 'INTERDITADO') {
+                                badgeClass = 'bg-warning text-dark';
+                                borderClass = 'border-warning';
+                                icon = '<i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>';
+                            }
+                            
+                            const nowStr = new Date().toLocaleString('pt-BR');
+                            
+                            feedbackDiv.className = `mt-3 p-3 rounded-3 border ${borderClass} text-light`;
+                            feedbackDiv.innerHTML = `
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="fw-bold text-light" style="font-size: 1.05rem;">
+                                        ${icon} CA ${data.numero}
+                                    </span>
+                                    <span class="badge ${badgeClass} px-2.5 py-1 fw-bold">${sit}</span>
+                                </div>
+                                <div class="text-secondary small mb-1"><strong>Descrição Oficial:</strong> ${data.equipamento || 'Não informada'}</div>
+                                <div class="text-secondary small mb-1"><strong>Grupo de Proteção:</strong> ${data.natureza_protecao ? data.natureza_protecao.split(' - ')[0] : 'Não informado'}</div>
+                                <div class="text-secondary small mb-1"><strong>Fabricante:</strong> ${data.fabricante} ${data.cnpj ? '(CNPJ: ' + data.cnpj + ')' : ''}</div>
+                                <div class="text-secondary small mb-1"><strong>Validade:</strong> ${data.data_validade || 'N/A'}</div>
+                                <div class="text-secondary small mb-1"><strong>N° Processo:</strong> ${data.processo || 'Não informado'}</div>
+                                <div class="text-secondary small mb-1"><strong>Natureza:</strong> ${data.natureza || 'N/A'}</div>
+                                <div class="text-secondary small mb-2"><strong>Aprovado para:</strong> ${data.natureza_protecao && data.natureza_protecao.includes(' - ') ? data.natureza_protecao.split(' - ').slice(1).join(' - ') : 'Não especificado'}</div>
+                                
+                                <div class="d-flex justify-content-between align-items-center border-top border-secondary pt-2 mt-2">
+                                    <span class="text-muted small" style="font-size: 0.72rem;">
+                                        Fonte: ${data.status_verificacao} | Consulta: ${nowStr}
+                                    </span>
+                                    <a href="https://consultaca.com/${data.numero}" class="btn btn-sm btn-link text-decoration-none text-primary p-0 font-monospace small" target="_blank" rel="noopener noreferrer">
+                                        Ver no ConsultaCA <i class="bi bi-box-arrow-up-right small"></i>
+                                    </a>
+                                </div>
+                            `;
+                            
+                            // Auto-fill fabricante if empty
+                            if (fabricanteField && (!fabricanteField.value || fabricanteField.value.trim() === '')) {
+                                fabricanteField.value = data.fabricante;
+                            }
+                            
+                            // Auto-select category if we can match it
+                            if (catField) {
+                                const lowerDesc = (data.equipamento || '').toLowerCase();
+                                const lowerGrupo = (data.natureza_protecao || '').toLowerCase();
+                                if (lowerDesc.includes('respirador') || lowerGrupo.includes('respiratória')) {
+                                    catField.value = 'PROTECAO_RESPIRATORIA';
+                                } else if (lowerDesc.includes('auditivo') || lowerDesc.includes('abafador') || lowerGrupo.includes('auditiva')) {
+                                    catField.value = 'PROTECAO_AUDITIVA';
+                                } else if (lowerDesc.includes('óculos') || lowerDesc.includes('mascara de solda') || lowerGrupo.includes('ocular')) {
+                                    catField.value = 'PROTECAO_OCULAR';
+                                } else if (lowerDesc.includes('bota') || lowerDesc.includes('sapato') || lowerGrupo.includes('inferiores')) {
+                                    catField.value = 'PROTECAO_MEMBROS_INF';
+                                } else if (lowerDesc.includes('luva') || lowerGrupo.includes('superiores')) {
+                                    catField.value = 'PROTECAO_MEMBROS_SUP';
+                                } else if (lowerDesc.includes('capacete') || lowerGrupo.includes('cabeça')) {
+                                    catField.value = 'PROTECAO_CABECA';
+                                }
+                            }
+                        } else {
+                            // CA Not found
+                            feedbackDiv.className = 'mt-3 p-3 rounded-3 border border-warning text-light';
+                            feedbackDiv.innerHTML = `
+                                <div class="d-flex align-items-center gap-2 mb-2 text-warning fw-bold">
+                                    <i class="bi bi-exclamation-triangle-fill"></i>
+                                    <span>Certificado de Aprovação não encontrado</span>
+                                </div>
+                                <p class="text-secondary small mb-0">Nenhum certificado foi localizado para o número <strong>${cleanCA}</strong>. Você pode prosseguir com o cadastro informando os dados manualmente.</p>
+                            `;
+                        }
+                    })
+                    .catch(err => {
+                        isQuerying = false;
+                        
+                        // Handle failure: show warning card with "Try again" action
+                        feedbackDiv.className = 'mt-3 p-3 rounded-3 border border-danger text-light';
+                        feedbackDiv.innerHTML = `
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <div class="d-flex align-items-center gap-2 text-danger fw-bold">
+                                    <i class="bi bi-exclamation-circle-fill"></i>
+                                    <span>Consulta Indisponível</span>
+                                </div>
+                                <button type="button" id="btn_retry_ca" class="btn btn-sm btn-outline-danger btn-premium py-0.5 px-2 font-monospace">Tentar novamente</button>
+                            </div>
+                            <p class="text-secondary small mb-0">Não foi possível consultar o CA neste momento (Serviço temporariamente indisponível). Você pode continuar o cadastro informando os dados manualmente.</p>
+                        `;
+                        
+                        // Bind retry action
+                        const retryBtn = document.getElementById('btn_retry_ca');
+                        if (retryBtn) {
+                            retryBtn.addEventListener('click', function() {
+                                consultarCA(caVal);
+                            });
+                        }
+                    });
+            }
+            
+            tipoField.addEventListener('change', toggleFields);
+            toggleFields();
+        }
+    });
+</script>
+{% endblock %}

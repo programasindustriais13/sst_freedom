@@ -27,7 +27,7 @@ class ProductListView(LoginRequiredMixin, ListView):
 class ProductCreateView(LoginRequiredMixin, CreateView):
     model = Product
     form_class = ProductForm
-    template_name = "organizations/form.html"
+    template_name = "ppe/product_form.html"
     success_url = "/ppe/"
 
     def get_context_data(self, **kwargs):
@@ -39,7 +39,7 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
 class ProductUpdateView(LoginRequiredMixin, UpdateView):
     model = Product
     form_class = ProductForm
-    template_name = "organizations/form.html"
+    template_name = "ppe/product_form.html"
     success_url = "/ppe/"
 
     def get_context_data(self, **kwargs):
@@ -776,5 +776,50 @@ class PPEMatrixBulkDeleteView(LoginRequiredMixin, View):
         except ProtectedError:
             messages.error(request, "Não foi possível excluir a matriz porque alguns itens estão vinculados a outros registros protegidos no sistema.")
             return redirect('function_detail', pk=self.funcao.id)
+
+
+@require_http_methods(["GET"])
+def ca_consultar_ajax(request):
+    """
+    Consulta rápida de um Certificado de Aprovação (CA) pelo número no ConsultaCA com cache.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'Autenticação necessária.'}, status=401)
+
+    q = request.GET.get('q', '').strip()
+    
+    # Remove "CA" prefix or dashes
+    q_clean = q.upper().replace('CA', '').replace('-', '').strip()
+    
+    # Ensure parameter has only digits and is within limits (max 20 chars)
+    if not q_clean.isdigit() or len(q_clean) > 20:
+        return JsonResponse({'success': False, 'error': 'Número de CA inválido (deve conter apenas dígitos, máximo 20 caracteres).'}, status=400)
+        
+    from .ca_services import ConsultaCAService
+    
+    try:
+        result = ConsultaCAService.get_or_query(q_clean)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger('ppe.views')
+        logger.error(f"Erro ao consultar CA {q_clean}: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'indisponivel': True,
+            'error': 'Não foi possível consultar o CA neste momento. Você pode tentar novamente ou continuar o cadastro informando os dados manualmente.'
+        })
+    
+    # Check if the query returned a non-success response due to external service unavailability
+    if not result.get('success', False):
+        if result.get('indisponivel', False):
+            return JsonResponse({
+                'success': False,
+                'indisponivel': True,
+                'error': result.get('error', 'Não foi possível consultar o CA neste momento. Você pode tentar novamente ou continuar o cadastro informando os dados manualmente.')
+            })
+        return JsonResponse({'success': False, 'error': result.get('error', 'Erro desconhecido.')}, status=400)
+        
+    return JsonResponse(result)
+
 
 

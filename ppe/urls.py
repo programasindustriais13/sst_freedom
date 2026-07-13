@@ -4,7 +4,8 @@ from .views import (
     CertificadoAprovacaoListView, CertificadoAprovacaoCreateView, PPEDeliveryListView,
     PPEDeliveryCreateView, delivery_sign_view, product_search_ajax, product_add_ajax,
     PPEMatrixCreateView, PPEMatrixUpdateView, ppe_matrix_toggle_active,
-    PPEMatrixListView, PPEMatrixBulkCreateView, PPEMatrixBulkUpdateView, PPEMatrixBulkDeleteView
+    PPEMatrixListView, PPEMatrixBulkCreateView, PPEMatrixBulkUpdateView, PPEMatrixBulkDeleteView,
+    ca_consultar_ajax
 )
 
 urlpatterns = [
@@ -16,6 +17,7 @@ urlpatterns = [
     
     path('ca/', CertificadoAprovacaoListView.as_view(), name='ca_list'),
     path('ca/add/', CertificadoAprovacaoCreateView.as_view(), name='ca_create'),
+    path('ca/consultar_ajax/', ca_consultar_ajax, name='ca_consultar_ajax'),
     
     path('deliveries/', PPEDeliveryListView.as_view(), name='delivery_list'),
     path('deliveries/add/', PPEDeliveryCreateView.as_view(), name='delivery_create'),

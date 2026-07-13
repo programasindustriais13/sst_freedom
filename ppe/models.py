@@ -79,8 +79,10 @@ class CertificadoAprovacao(models.Model):
     
     equipamento = models.CharField(max_length=255, blank=True, null=True, verbose_name="Descrição Oficial do Equipamento")
     fabricante = models.CharField(max_length=255, blank=True, null=True, verbose_name="Fabricante/Importador Oficial")
+    cnpj = models.CharField(max_length=20, blank=True, null=True, verbose_name="CNPJ do Fabricante/Importador")
     natureza_protecao = models.TextField(blank=True, null=True, verbose_name="Natureza da Proteção")
     situacao = models.CharField(max_length=100, blank=True, null=True, verbose_name="Situação do C.A.")
+    observacoes = models.TextField(blank=True, null=True, verbose_name="Restrições ou Observações")
     
     data_emissao = models.DateField(blank=True, null=True, verbose_name="Data de Emissão")
     data_validade = models.DateField(verbose_name="Data de Validade do C.A.")
@@ -90,6 +92,9 @@ class CertificadoAprovacao(models.Model):
     
     status_verificacao = models.CharField(max_length=30, choices=STATUS_VERIFICACAO, default='INFORMADO_MANUALMENTE', verbose_name="Status de Verificação")
     justificativa_manual = models.TextField(blank=True, null=True, verbose_name="Justificativa (Se cadastrado manualmente)")
+    
+    presente_na_fonte = models.BooleanField(default=True, verbose_name="Presente na Fonte Oficial")
+    versao_importacao = models.BigIntegerField(default=0, verbose_name="Versão da Última Importação")
 
     class Meta:
         verbose_name = "Certificado de Aprovação (C.A.)"
@@ -97,6 +102,50 @@ class CertificadoAprovacao(models.Model):
 
     def __str__(self):
         return f"{self.numero_exibicao} - {self.fabricante or 'MTE'}"
+
+
+class CAEPISyncLog(models.Model):
+    STATUS_CHOICES = (
+        ('INICIADO', 'Iniciado'),
+        ('BAIXANDO', 'Baixando'),
+        ('PROCESSANDO', 'Processando'),
+        ('CONCLUIDO', 'Concluído'),
+        ('CONCLUIDO_ALERTAS', 'Concluído com Alertas'),
+        ('FALHOU', 'Falhou'),
+        ('IGNORADO', 'Ignorado por não haver nova versão'),
+    )
+
+    start_time = models.DateTimeField(auto_now_add=True, verbose_name="Data e Hora de Início")
+    end_time = models.DateTimeField(blank=True, null=True, verbose_name="Data e Hora de Conclusão")
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='INICIADO', verbose_name="Status")
+    tipo_execucao = models.CharField(max_length=20, choices=(('MANUAL', 'Manual'), ('AUTOMATICA', 'Automática')), default='MANUAL', verbose_name="Tipo de Execução")
+    
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Usuário Responsável")
+    fonte = models.CharField(max_length=255, verbose_name="Fonte Consultada")
+    arquivo_nome = models.CharField(max_length=255, blank=True, null=True, verbose_name="Arquivo Processado")
+    arquivo_tamanho = models.BigIntegerField(blank=True, null=True, verbose_name="Tamanho do Arquivo (Bytes)")
+    arquivo_hash = models.CharField(max_length=64, blank=True, null=True, verbose_name="Hash SHA-256 do Arquivo")
+    
+    total_lido = models.IntegerField(default=0, verbose_name="Total Lido")
+    total_valido = models.IntegerField(default=0, verbose_name="Total Válido")
+    total_invalido = models.IntegerField(default=0, verbose_name="Total Inválido")
+    total_criados = models.IntegerField(default=0, verbose_name="Total Criados")
+    total_atualizados = models.IntegerField(default=0, verbose_name="Total Atualizados")
+    total_inalterados = models.IntegerField(default=0, verbose_name="Total Inalterados")
+    total_desativados = models.IntegerField(default=0, verbose_name="Total Desativados")
+    
+    erro_mensagem = models.TextField(blank=True, null=True, verbose_name="Mensagem de Erro")
+    traceback = models.TextField(blank=True, null=True, verbose_name="Traceback Técnico")
+    duracao_segundos = models.FloatField(blank=True, null=True, verbose_name="Duração (Segundos)")
+
+    class Meta:
+        verbose_name = "Log de Sincronização CAEPI"
+        verbose_name_plural = "Logs de Sincronização CAEPI"
+        ordering = ['-start_time']
+
+    def __str__(self):
+        return f"Sincronização {self.id} ({self.start_time.strftime('%d/%m/%Y %H:%M')}) - {self.status}"
+
 
 
 class PPEMatrix(models.Model):

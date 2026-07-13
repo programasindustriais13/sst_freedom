@@ -44,3 +44,8 @@ ruff>=0.4
 black>=24.0
 isort>=5.13
 mypy>=1.10
+
+# --- Integrations ---
+requests==2.32.3
+beautifulsoup4==4.12.3
+

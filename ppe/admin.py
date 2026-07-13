@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.db.models import ProtectedError
 from django.http import HttpResponseRedirect
 from django.contrib import messages
-from .models import Product, ProductVariant, CertificadoAprovacao, PPEMatrix, ExtraordinaryPPE, PPEDelivery
+from .models import Product, ProductVariant, CertificadoAprovacao, CAEPISyncLog, PPEMatrix, ExtraordinaryPPE, PPEDelivery
 
 
 class SuperUserDeleteMixin:
@@ -26,6 +26,62 @@ class SuperUserDeleteMixin:
                 level=messages.ERROR,
             )
             return HttpResponseRedirect(".")
+
+
+@admin.register(CertificadoAprovacao)
+class CertificadoAprovacaoAdmin(SuperUserDeleteMixin, admin.ModelAdmin):
+    list_display = [
+        "numero_exibicao",
+        "fabricante",
+        "cnpj",
+        "situacao",
+        "data_validade",
+        "status_verificacao",
+        "presente_na_fonte",
+    ]
+    search_fields = ["numero", "numero_exibicao", "fabricante", "cnpj"]
+    list_filter = ["situacao", "status_verificacao", "presente_na_fonte", "data_validade"]
+    ordering = ["-data_validade"]
+    date_hierarchy = "data_validade"
+    list_per_page = 50
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.status_verificacao == 'VERIFICADO_BASE_OFICIAL':
+            # Se for oficial, tudo é somente leitura
+            return [f.name for f in self.model._meta.fields]
+        # Para cadastro manual, estes campos são apenas informativos
+        return ["versao_importacao", "presente_na_fonte", "fonte", "ultima_sincronizacao"]
+
+
+@admin.register(CAEPISyncLog)
+class CAEPISyncLogAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "status",
+        "tipo_execucao",
+        "start_time",
+        "end_time",
+        "duracao_segundos",
+        "total_lido",
+        "total_criados",
+        "total_atualizados",
+        "total_desativados",
+    ]
+    list_filter = ["status", "tipo_execucao", "start_time"]
+    ordering = ["-start_time"]
+    readonly_fields = [f.name for f in CAEPISyncLog._meta.fields] + ["duracao_segundos"]
+    list_per_page = 20
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 
 
 class ProductVariantInline(admin.TabularInline):
@@ -59,20 +115,7 @@ class ProductVariantAdmin(admin.ModelAdmin):
     list_per_page = 50
 
 
-@admin.register(CertificadoAprovacao)
-class CertificadoAprovacaoAdmin(SuperUserDeleteMixin, admin.ModelAdmin):
-    list_display = [
-        "numero_exibicao",
-        "fabricante",
-        "situacao",
-        "data_validade",
-        "status_verificacao",
-    ]
-    search_fields = ["numero", "numero_exibicao", "fabricante"]
-    list_filter = ["situacao", "status_verificacao", "data_validade"]
-    ordering = ["-data_validade"]
-    date_hierarchy = "data_validade"
-    list_per_page = 50
+
 
 
 @admin.register(PPEMatrix)
