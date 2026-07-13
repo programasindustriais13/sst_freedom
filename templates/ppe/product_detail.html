@@ -64,6 +64,60 @@
                 </div>
             </div>
         </div>
+
+        {% if ca_obj %}
+        <div class="card-premium mb-4" style="border-color: rgba(255, 255, 255, 0.08);">
+            <h4 class="mb-3 text-light"><i class="bi bi-shield-check me-2 text-success"></i>Dados Oficiais do CA</h4>
+            <div class="row g-3 text-secondary" style="font-size: 0.9rem;">
+                <div class="col-12 border-bottom border-secondary pb-2">
+                    <span class="badge {% if ca_obj.situacao == 'VÁLIDO' %}bg-success text-white{% else %}bg-danger text-white{% endif %} float-end fw-bold">{{ ca_obj.situacao }}</span>
+                    <small class="text-muted d-block">Número do CA</small>
+                    <span class="text-light fw-bold">{{ ca_obj.numero_exibicao }}</span>
+                </div>
+                <div class="col-12">
+                    <small class="text-muted d-block">Descrição Oficial</small>
+                    <span class="text-light">{{ ca_obj.equipamento|default:"-" }}</span>
+                </div>
+                <div class="col-12">
+                    <small class="text-muted d-block">Grupo de Proteção</small>
+                    <span class="text-light">{{ ca_obj.grupo_protecao|default:"-" }}</span>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Validade</small>
+                    <span class="text-light fw-semibold">{{ ca_obj.data_validade|date:"d/m/Y"|default:"-" }}</span>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Processo</small>
+                    <span class="text-light">{{ ca_obj.processo|default:"-" }}</span>
+                </div>
+                <div class="col-12">
+                    <small class="text-muted d-block">Fabricante Oficial</small>
+                    <span class="text-light">{{ ca_obj.fabricante|default:"-" }} {% if ca_obj.cnpj %}(CNPJ: {{ ca_obj.cnpj }}){% endif %}</span>
+                </div>
+                {% if ca_obj.nome_fantasia %}
+                <div class="col-12">
+                    <small class="text-muted d-block">Nome Fantasia</small>
+                    <span class="text-light">{{ ca_obj.nome_fantasia }}</span>
+                </div>
+                {% endif %}
+                <div class="col-6">
+                    <small class="text-muted d-block">Cidade / UF</small>
+                    <span class="text-light">{{ ca_obj.cidade|default:"-" }}/{{ ca_obj.uf|default:"-" }}</span>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Natureza</small>
+                    <span class="text-light">{{ ca_obj.natureza|default:"-" }}</span>
+                </div>
+                <div class="col-12">
+                    <small class="text-muted d-block">Aprovado Para</small>
+                    <span class="text-light small">{{ ca_obj.aprovado_para|default:"-" }}</span>
+                </div>
+                <div class="col-12 border-top border-secondary pt-2 mt-2">
+                    <small class="text-muted d-block" style="font-size: 0.72rem;">Fonte: {{ ca_obj.get_status_verificacao_display }} | Última consulta: {{ ca_obj.ultima_sincronizacao|date:"d/m/Y H:i:s" }}</small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
         
         <!-- Adicionar Variante (Tamanho) -->
         <div class="card-premium">

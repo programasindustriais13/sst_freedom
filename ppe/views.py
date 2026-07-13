@@ -77,6 +77,12 @@ class ProductDetailView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         context['variants'] = self.object.variants.all()
         
+        # Load CA details if they exist
+        if self.object.ca_numero:
+            num_norm = "".join([c for c in str(self.object.ca_numero) if c.isdigit()])
+            if num_norm:
+                context['ca_obj'] = CertificadoAprovacao.objects.filter(numero=num_norm).first()
+
         # Calcula saldos por local para cada variante
         user_units = self.request.user.units.all()
         if self.request.user.is_superuser and not user_units.exists():

@@ -323,6 +323,12 @@ class ConsultaCATestCase(TestCase):
         response = self.client.get(reverse('product_update', kwargs={'pk': prod.id}))
         self.assertEqual(response.context['ca_obj'], ca_obj)
         
+        # Test Detail view GET (context has ca_obj and renders card)
+        response = self.client.get(reverse('product_detail', kwargs={'pk': prod.id}))
+        self.assertEqual(response.context['ca_obj'], ca_obj)
+        self.assertContains(response, "Dados Oficiais do CA")
+        self.assertContains(response, "Bunzl")
+        
         # Test Create view POST with invalid form (re-rendering)
         post_data = {
             'nome': '', # invalid
