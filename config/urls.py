@@ -16,12 +16,20 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.http import HttpResponse
 from core.views import (
     DashboardView, ReportListView, ReportStockPositionView,
     ReportStockMovementsView, ReportPPEDeliveriesView, ReportCAValidityView
 )
 
+def service_worker(request):
+    return HttpResponse(
+        "// Service Worker placeholder\n",
+        content_type="application/javascript"
+    )
+
 urlpatterns = [
+    path("service-worker.js", service_worker, name="service_worker"),
     path("admin/", admin.site.urls),
     path("", DashboardView.as_view(), name="dashboard"),
     
