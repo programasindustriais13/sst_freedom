@@ -1,0 +1,247 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .danger-warning-box {
+        background-color: #fce8e6;
+        border: 2px solid #d93025;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 25px;
+        color: #b00020;
+    }
+    /* Django Admin dark mode support */
+    @media (prefers-color-scheme: dark) {
+        .danger-warning-box {
+            background-color: #3d0007;
+            border-color: #ff6b6b;
+            color: #ffc9c9;
+        }
+    }
+    .danger-warning-box h2 {
+        margin-top: 0;
+        color: inherit;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .confirmation-section {
+        background-color: #f1f3f4;
+        border: 1px solid #dadce0;
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 25px;
+        margin-bottom: 25px;
+    }
+    @media (prefers-color-scheme: dark) {
+        .confirmation-section {
+            background-color: #1f2a3c;
+            border-color: #384b66;
+            color: #f8fafc;
+        }
+    }
+    .confirmation-section input[type="text"] {
+        padding: 8px 12px;
+        font-size: 16px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        width: 100%;
+        max-width: 300px;
+        margin-top: 10px;
+        margin-bottom: 10px;
+        display: block;
+    }
+    .confirmation-section label {
+        font-weight: bold;
+        display: block;
+    }
+    .object-list-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+    }
+    .object-list-table th, .object-list-table td {
+        padding: 10px;
+        border: 1px solid #dadce0;
+        text-align: left;
+    }
+    @media (prefers-color-scheme: dark) {
+        .object-list-table th, .object-list-table td {
+            border-color: #384b66;
+        }
+    }
+    .object-list-table th {
+        background-color: #f8fafc;
+        font-weight: bold;
+    }
+    @media (prefers-color-scheme: dark) {
+        .object-list-table th {
+            background-color: #1e293b;
+        }
+    }
+    .badge-count {
+        background-color: #d93025;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    .button-row {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        margin-top: 20px;
+    }
+    .btn-danger-confirm {
+        background-color: #d93025 !important;
+        color: white !important;
+        border: none;
+        padding: 10px 20px;
+        font-size: 14px;
+        font-weight: bold;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .btn-danger-confirm:disabled {
+        background-color: #ea868f !important;
+        cursor: not-allowed;
+    }
+    .btn-cancel {
+        background-color: #f1f3f4;
+        color: #3c4043;
+        border: 1px solid #dadce0;
+        padding: 10px 20px;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: bold;
+        border-radius: 4px;
+        display: inline-block;
+    }
+    @media (prefers-color-scheme: dark) {
+        .btn-cancel {
+            background-color: #334155;
+            color: #f8fafc;
+            border-color: #475569;
+        }
+    }
+    .error-alert {
+        background-color: #fce8e6;
+        border-left: 5px solid #d93025;
+        padding: 15px;
+        color: #a51d24;
+        margin-bottom: 20px;
+        border-radius: 4px;
+    }
+    @media (prefers-color-scheme: dark) {
+        .error-alert {
+            background-color: #3d0007;
+            color: #ffc9c9;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+&rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural }}</a>
+&rsaquo; {% translate 'Cascade Delete Confirmation' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <div class="danger-warning-box">
+        <h2>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+            </svg>
+            ATENÇÃO: Operação de Alto Risco!
+        </h2>
+        {% if is_bulk %}
+            <p>Você está prestes a excluir permanentemente os <strong>{{ queryset.count }}</strong> registros selecionados de <strong>{{ opts.verbose_name_plural }}</strong> e todos os seus respectivos dados relacionados listados abaixo.</p>
+        {% else %}
+            <p>Você está prestes a excluir permanentemente a Empresa/Registro <strong>"{{ object_name }}"</strong> e todos os dados relacionados listados abaixo.</p>
+        {% endif %}
+        <p><strong>ESTA AÇÃO É IRREVERSÍVEL E NÃO PODERÁ SER DESFEITA.</strong></p>
+    </div>
+
+    {% if error_msg %}
+        <div class="error-alert">
+            <strong>Erro:</strong> {{ error_msg }}
+        </div>
+    {% endif %}
+
+    <h3>Resumo dos dados que serão excluídos (Total de objetos relacionados: {{ total_related }}):</h3>
+
+    <table class="object-list-table">
+        <thead>
+            <tr>
+                <th>Tipo de Objeto / Modelo</th>
+                <th>Quantidade</th>
+                <th>Exemplos de Registros que serão apagados</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for group in object_summary %}
+                <tr>
+                    <td><strong>{{ group.model_name }}</strong></td>
+                    <td><span class="badge-count">{{ group.count }}</span></td>
+                    <td>
+                        <ul style="margin: 0; padding-left: 20px;">
+                            {% for item in group.items %}
+                                <li>{{ item }}</li>
+                            {% endfor %}
+                            {% if group.has_more %}
+                                <li><em>e outros...</em></li>
+                            {% endif %}
+                        </ul>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <form method="post" id="cascade-delete-form">
+        {% csrf_token %}
+        {% if is_bulk %}
+            <input type="hidden" name="post_confirmed" value="yes">
+            {% for obj in queryset %}
+                <input type="hidden" name="{{ action_checkbox_name }}" value="{{ obj.pk }}">
+            {% endfor %}
+            <input type="hidden" name="action" value="delete_selected">
+        {% endif %}
+
+        <div class="confirmation-section">
+            <label for="confirmation_word">Para confirmar a exclusão, digite a palavra de confirmação em caixa alta abaixo:</label>
+            <p style="margin: 5px 0; color: #555;">Palavra de confirmação: <strong style="color: #d93025;">EXCLUIR</strong></p>
+            <input type="text" id="confirmation_word" name="confirmation_word" placeholder="Digite EXCLUIR aqui" autocomplete="off" required>
+        </div>
+
+        <div class="button-row">
+            <button type="submit" class="btn-danger-confirm" id="btn-submit" disabled>EXCLUIR DEFINITIVAMENTE</button>
+            <a href="{{ cancel_url }}" class="btn-cancel">CANCELAR OPERAÇÃO</a>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const inputField = document.getElementById("confirmation_word");
+        const submitButton = document.getElementById("btn-submit");
+
+        inputField.addEventListener("input", function() {
+            if (inputField.value.trim() === "EXCLUIR") {
+                submitButton.removeAttribute("disabled");
+            } else {
+                submitButton.setAttribute("disabled", "true");
+            }
+        });
+    });
+</script>
+{% endblock %}

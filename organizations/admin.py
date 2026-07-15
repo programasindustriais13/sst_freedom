@@ -1,8 +1,9 @@
 from django.contrib import admin
+from core.admin import CascadeDeleteAdminMixin
 from .models import Company, Unit, Sector, CostCenter, Function, InventoryLocation
 
 @admin.register(Company)
-class CompanyAdmin(admin.ModelAdmin):
+class CompanyAdmin(CascadeDeleteAdminMixin, admin.ModelAdmin):
     list_display = ['nome_fantasia', 'razao_social', 'cnpj', 'ativo']
     search_fields = ['nome_fantasia', 'razao_social', 'cnpj']
     list_filter = ['ativo']

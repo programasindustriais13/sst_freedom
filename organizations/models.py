@@ -9,6 +9,9 @@ class Company(models.Model):
     class Meta:
         verbose_name = "Empresa"
         verbose_name_plural = "Empresas"
+        permissions = [
+            ("can_force_cascade_delete", "Pode forçar a exclusão em cascata de registros"),
+        ]
 
     def __str__(self):
         return self.nome_fantasia
