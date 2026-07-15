@@ -57,6 +57,30 @@ media/
 node_modules/
 
 # ==============================================================================
+# DADOS LOCAIS E ARQUIVOS SENSÍVEIS
+# ==============================================================================
+
+# Banco de desenvolvimento
+/db.sqlite3
+/db.sqlite3-journal
+
+# Variáveis de ambiente
+/.env
+/.env.local
+/.env.production
+/.env.development
+
+# Planilhas com dados reais
+/EPIs ESTOQ.xlsx
+/PLANILHA DE ATUALIZAÇÃO ASO*.xlsx
+
+# Alternativa: ignorar todas as planilhas
+# *.xlsx
+
+# Manter apenas arquivos de exemplo
+!.env.example
+
+# ==============================================================================
 # EXPLICIT INCLUSIONS (DO NOT IGNORE)
 # ==============================================================================
 !.env.example
