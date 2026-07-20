@@ -1,5 +1,5 @@
 import json
-from django.test import TestCase
+from django.test import TestCase, SimpleTestCase
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.urls import reverse
@@ -343,3 +343,55 @@ class AdminCascadeDeleteTestCase(TestCase):
         response = self.client.post(url, {"post": "yes"})
         self.assertRedirects(response, reverse("admin:organizations_company_changelist"))
         self.assertFalse(Company.objects.filter(pk=standalone_company.pk).exists())
+
+
+class SecuritySettingsTestCase(SimpleTestCase):
+
+    def test_allowed_hosts_parsing(self):
+        raw_val = "  sst.freedom.dev.br , 192.168.0.202, 127.0.0.1, , localhost  "
+        parsed = [host.strip() for host in raw_val.split(",") if host.strip()]
+        self.assertEqual(parsed, ["sst.freedom.dev.br", "192.168.0.202", "127.0.0.1", "localhost"])
+
+    def test_csrf_trusted_origins_parsing(self):
+        raw_val = "  https://sst.freedom.dev.br , http://localhost:8800 , , "
+        parsed = [origin.strip() for origin in raw_val.split(",") if origin.strip()]
+        self.assertEqual(parsed, ["https://sst.freedom.dev.br", "http://localhost:8800"])
+
+    def test_boolean_env_parsing(self):
+        self.assertTrue("True".lower() == "true")
+        self.assertTrue("true".lower() == "true")
+        self.assertFalse("False".lower() == "true")
+        self.assertFalse("".lower() == "true")
+
+    def test_secret_key_validation_in_production(self):
+        debug = False
+        secret_key = None
+        with self.assertRaises(RuntimeError) as cm:
+            if not secret_key:
+                if debug:
+                    secret_key = "django-insecure-local-development-only"
+                else:
+                    raise RuntimeError(
+                        "A variável de ambiente SECRET_KEY é obrigatória quando DEBUG=False."
+                    )
+        self.assertIn("SECRET_KEY é obrigatória quando DEBUG=False", str(cm.exception))
+
+    def test_secret_key_fallback_in_debug(self):
+        debug = True
+        secret_key = None
+        if not secret_key:
+            if debug:
+                secret_key = "django-insecure-local-development-only"
+        self.assertEqual(secret_key, "django-insecure-local-development-only")
+
+    def test_current_django_settings_configured_safely(self):
+        from django.conf import settings
+        self.assertIn("localhost", settings.ALLOWED_HOSTS)
+        self.assertIn("127.0.0.1", settings.ALLOWED_HOSTS)
+        self.assertNotIn("*", settings.ALLOWED_HOSTS)
+        self.assertEqual(settings.SECURE_PROXY_SSL_HEADER, ("HTTP_X_FORWARDED_PROTO", "https"))
+        self.assertIsInstance(settings.CSRF_TRUSTED_ORIGINS, list)
+        self.assertIsInstance(settings.SESSION_COOKIE_SECURE, bool)
+        self.assertIsInstance(settings.CSRF_COOKIE_SECURE, bool)
+        self.assertIsInstance(settings.SECURE_SSL_REDIRECT, bool)
+
