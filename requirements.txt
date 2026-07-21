@@ -31,6 +31,7 @@ boto3>=1.34,<2.0
 # --- Production Serving ---
 whitenoise>=6.0
 gunicorn>=22.0
+waitress>=3.0.2
 
 # --- Development Tools ---
 ipython>=8.0
