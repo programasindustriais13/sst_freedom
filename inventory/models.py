@@ -191,3 +191,19 @@ class StockTransferItem(models.Model):
 
     def __str__(self):
         return f"{self.product_variant.product.nome} (Lote {self.lot.identificador}) - Enviado: {self.quantity_sent}"
+
+
+class LocationStockMinimo(models.Model):
+    product_variant = models.ForeignKey('ppe.ProductVariant', on_delete=models.CASCADE, related_name='location_minimums', verbose_name="Variante de EPI")
+    location = models.ForeignKey(InventoryLocation, on_delete=models.CASCADE, related_name='variant_minimums', verbose_name="Local de Estoque")
+    estoque_minimo = models.IntegerField(default=0, verbose_name="Estoque Mínimo")
+    atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
+
+    class Meta:
+        verbose_name = "Estoque Mínimo por Local"
+        verbose_name_plural = "Estoques Mínimos por Local"
+        unique_together = ('product_variant', 'location')
+
+    def __str__(self):
+        return f"Mínimo: {self.estoque_minimo} para {self.product_variant} em {self.location.nome}"
+

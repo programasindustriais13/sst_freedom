@@ -108,7 +108,7 @@ class PPEServicesTestCase(TestCase):
         self.assertEqual(delivery.quantidade, 1)
         self.assertEqual(delivery.vida_util_aplicada, 120)  # matching matrix entry
         self.assertEqual(delivery.origem_necessidade, 'MATRIZ')
-        self.assertEqual(delivery.status_assinatura, 'PENDENTE')
+        self.assertEqual(delivery.status_assinatura, 'REGISTRADO_OPERADOR')
 
         # Stock balance in SST should be 4
         self.assertEqual(get_stock_balance(self.loc_sst, self.variant, self.lot), 4)
@@ -160,7 +160,7 @@ class PPEServicesTestCase(TestCase):
             natureza_entrega='FORNECIMENTO_INICIAL'
         )
 
-        self.assertEqual(delivery.status_assinatura, 'PENDENTE')
+        self.assertEqual(delivery.status_assinatura, 'REGISTRADO_OPERADOR')
         confirm_delivery_signature(delivery, "João da Silva")
         
         delivery.refresh_from_db()

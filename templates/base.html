@@ -53,6 +53,10 @@
                 <i class="bi bi-arrow-left-right"></i> Transferências
             </a>
 
+            <a class="nav-link-premium {% if 'minimum-stock' in request.path %}active{% endif %}" href="{% url 'minimum_stock_list' %}">
+                <i class="bi bi-sliders"></i> Estoque Mínimo
+            </a>
+
             {% if request.user.is_tecnico or request.user.is_admin %}
             <a class="nav-link-premium {% if 'ppe/deliveries' in request.path %}active{% endif %}" href="{% url 'delivery_list' %}">
                 <i class="bi bi-journal-check"></i> Entregas / Ficha EPI

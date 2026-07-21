@@ -95,6 +95,7 @@
         <div class="card-premium">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h4 class="mb-0"><i class="bi bi-graph-down-arrow text-warning me-2"></i> Estoques abaixo do Mínimo</h4>
+                <a href="{% url 'minimum_stock_list' %}" class="btn btn-sm btn-outline-warning rounded-pill">Gerenciar Mínimos</a>
             </div>
 
             {% if below_min %}
@@ -106,17 +107,26 @@
                             <th class="text-muted border-0">Local / Unid.</th>
                             <th class="text-muted border-0 text-center">Saldo</th>
                             <th class="text-muted border-0 text-center">Mínimo</th>
+                            <th class="text-muted border-0 text-center">Situação</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in below_min %}
                         <tr>
                             <td class="text-light border-secondary">
-                                {{ item.product }} <small class="text-muted d-block">Tamanho: {{ item.tamanho }}</small>
+                                {{ item.product }}
+                                <small class="text-muted d-block">Tamanho: {{ item.tamanho }} {% if item.ca %}| CA: {{ item.ca }}{% endif %}</small>
                             </td>
                             <td class="border-secondary">{{ item.location }} <small class="text-muted d-block">{{ item.unit }}</small></td>
-                            <td class="text-center text-danger fw-bold border-secondary">{{ item.saldo }}</td>
+                            <td class="text-center {% if item.saldo == 0 %}text-danger fw-bold{% else %}text-warning fw-bold{% endif %} border-secondary">{{ item.saldo }}</td>
                             <td class="text-center border-secondary">{{ item.minimo }}</td>
+                            <td class="text-center border-secondary">
+                                {% if item.situacao == 'ABAIXO' %}
+                                <span class="badge bg-danger">Abaixo (Falta {{ item.faltante }})</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark">No Limite</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>

@@ -19,6 +19,20 @@ def get_stock_balance(location, product_variant, lot=None):
     return balance if balance is not None else 0
 
 
+def get_location_minimum_stock(location, product_variant):
+    """
+    Retorna o estoque mínimo configurado para a combinação de Local e Variante.
+    Se houver registro específico em LocationStockMinimo, utiliza este valor.
+    Caso contrário, retorna o estoque mínimo cadastrado na variante.
+    """
+    from .models import LocationStockMinimo
+    min_obj = LocationStockMinimo.objects.filter(location=location, product_variant=product_variant).first()
+    if min_obj:
+        return min_obj.estoque_minimo
+    return product_variant.estoque_minimo or 0
+
+
+
 @transaction.atomic
 def confirm_fiscal_note(fiscal_note, user):
     """

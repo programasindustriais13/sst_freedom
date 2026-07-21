@@ -91,6 +91,21 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
                 context['ca_obj'] = CertificadoAprovacao.objects.filter(numero=num_norm).first()
         return context
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        tamanhos_str = self.request.POST.get('tamanhos_str', '').strip()
+        tamanhos_list = [t.strip() for t in tamanhos_str.split(',') if t.strip()] if tamanhos_str else []
+        if not tamanhos_list and not self.object.variants.exists():
+            tamanhos_list = ['U']
+
+        for tam in tamanhos_list:
+            ProductVariant.objects.get_or_create(
+                product=self.object,
+                tamanho=tam,
+                defaults={'ativo': True, 'estoque_minimo': 0}
+            )
+        return response
+
 
 class ProductUpdateView(LoginRequiredMixin, UpdateView):
     model = Product
@@ -113,6 +128,20 @@ class ProductUpdateView(LoginRequiredMixin, UpdateView):
             if num_norm:
                 context['ca_obj'] = CertificadoAprovacao.objects.filter(numero=num_norm).first()
         return context
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        tamanhos_str = self.request.POST.get('tamanhos_str', '').strip()
+        if tamanhos_str:
+            tamanhos_list = [t.strip() for t in tamanhos_str.split(',') if t.strip()]
+            for tam in tamanhos_list:
+                ProductVariant.objects.get_or_create(
+                    product=self.object,
+                    tamanho=tam,
+                    defaults={'ativo': True, 'estoque_minimo': 0}
+                )
+        return response
+
 
 
 class ProductDetailView(LoginRequiredMixin, DetailView):
@@ -311,6 +340,12 @@ class PPEDeliveryCreateView(LoginRequiredMixin, CreateView):
     fields = ['employee', 'product_variant', 'lot', 'quantidade', 'data_entrega', 'natureza_entrega', 'motivo_substituicao']
     template_name = "ppe/delivery_form.html"
 
+    def get_initial(self):
+        initial = super().get_initial()
+        if not initial.get('data_entrega'):
+            initial['data_entrega'] = timezone.now().date()
+        return initial
+
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
         user = self.request.user
@@ -335,6 +370,22 @@ class PPEDeliveryCreateView(LoginRequiredMixin, CreateView):
                     available_lots.append(lot.id)
                     break
         form.fields['lot'].queryset = Lot.objects.filter(id__in=available_lots).select_related('product_variant__product')
+
+        # Pré-seleção segura do colaborador via query param ?employee=<id>
+        emp_param = self.request.GET.get('employee', '').strip()
+        if emp_param:
+            try:
+                emp_id = int(emp_param)
+                emp = Employee.objects.filter(id=emp_id, unit__in=user_units).first()
+                if emp and emp.situacao == 'ATIVO':
+                    form.fields['employee'].initial = emp.id
+                elif emp and emp.situacao != 'ATIVO':
+                    messages.warning(self.request, f"O colaborador '{emp.nome_completo}' informado está {emp.get_situacao_display().lower()} e não pode receber entregas de EPI.")
+                else:
+                    messages.warning(self.request, "O colaborador informado na URL não foi encontrado ou não pertence ao seu escopo de acesso.")
+            except (ValueError, TypeError):
+                messages.warning(self.request, "Identificador de colaborador inválido recebido na URL.")
+
         return form
 
     def post(self, request, *args, **kwargs):
@@ -368,11 +419,11 @@ class PPEDeliveryCreateView(LoginRequiredMixin, CreateView):
                     model_name="PPEDelivery",
                     object_id=delivery.id,
                     before=None,
-                    after={'colaborador': employee.nome_completo, 'matricula': employee.matricula, 'quantidade': quantidade, 'status_assinatura': 'PENDENTE'}
+                    after={'colaborador': employee.nome_completo, 'matricula': employee.matricula, 'quantidade': quantidade, 'status_assinatura': delivery.status_assinatura}
                 )
                 
-                messages.success(request, f"EPI {product_variant.product.nome} entregue com sucesso! Coleta de ciência pendente.")
-                return redirect('delivery_sign', pk=delivery.id)
+                messages.success(request, f"EPI {product_variant.product.nome} entregue com sucesso para {employee.nome_completo}! Estoque baixado.")
+                return redirect('employee_detail', pk=employee.id)
             except Exception as e:
                 messages.error(request, f"Erro ao realizar entrega: {str(e)}")
         else:
@@ -382,32 +433,9 @@ class PPEDeliveryCreateView(LoginRequiredMixin, CreateView):
 
 def delivery_sign_view(request, pk):
     delivery = get_object_or_404(PPEDelivery, pk=pk)
-    if request.method == 'POST':
-        nome_confirmacao = request.POST.get('nome_confirmacao')
-        if not nome_confirmacao:
-            messages.error(request, "O nome do trabalhador é obrigatório para confirmar a assinatura.")
-            return render(request, "ppe/delivery_sign.html", {'delivery': delivery})
-            
-        try:
-            confirm_delivery_signature(delivery, nome_confirmacao)
-            
-            # Grava auditoria
-            from audit.models import log_audit
-            log_audit(
-                request=request,
-                action=f"Confirmação de Ciência de Entrega: Colaborador {delivery.employee.nome_completo} assinou recibo",
-                model_name="PPEDelivery",
-                object_id=delivery.id,
-                before={'status_assinatura': 'PENDENTE'},
-                after={'status_assinatura': 'ASSINADO', 'confirmado_por': nome_confirmacao, 'hash': delivery.recibo_hash}
-            )
-            
-            messages.success(request, "Ciência do trabalhador registrada e recibo assinado eletronicamente!")
-            return redirect('employee_detail', pk=delivery.employee.id)
-        except Exception as e:
-            messages.error(request, f"Erro ao assinar: {str(e)}")
-            
-    return render(request, "ppe/delivery_sign.html", {'delivery': delivery})
+    messages.info(request, "A etapa de assinatura manual do colaborador foi desativada temporariamente. As entregas de EPI são concluídas diretamente pelo operador.")
+    return redirect('employee_detail', pk=delivery.employee.id)
+
 
 
 @require_http_methods(["GET"])

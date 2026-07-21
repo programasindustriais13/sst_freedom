@@ -418,3 +418,155 @@ def receive_transfer_view(request, pk):
             messages.error(request, f"Erro ao receber transferência: {str(e)}")
         return redirect('transfer_detail', pk=pk)
     return redirect('transfer_list')
+
+
+class MinimumStockListView(LoginRequiredMixin, ListView):
+    template_name = "inventory/minimum_stock.html"
+    context_object_name = "items"
+    paginate_by = 20
+
+    def get_queryset(self):
+        user = self.request.user
+        user_units = user.units.all()
+        if user.is_superuser and not user_units.exists():
+            user_units = Unit.objects.all()
+
+        locations = InventoryLocation.objects.filter(unit__in=user_units, ativo=True).select_related('unit')
+
+        # Filtros
+        q = self.request.GET.get('q', '').strip()
+        location_id = self.request.GET.get('location', '').strip()
+        unit_id = self.request.GET.get('unit', '').strip()
+        situacao = self.request.GET.get('situacao', '').strip()
+
+        if location_id:
+            locations = locations.filter(id=location_id)
+        if unit_id:
+            locations = locations.filter(unit_id=unit_id)
+
+        variants = ProductVariant.objects.filter(ativo=True).select_related('product')
+        if q:
+            variants = variants.filter(
+                models.Q(product__nome__icontains=q) |
+                models.Q(product__ca_numero__icontains=q) |
+                models.Q(tamanho__icontains=q) |
+                models.Q(sku__icontains=q)
+            )
+
+        from .services import get_location_minimum_stock
+        items_data = []
+        for var in variants:
+            for loc in locations:
+                bal = get_stock_balance(loc, var)
+                min_val = get_location_minimum_stock(loc, var)
+
+                if min_val == 0:
+                    sit = 'SEM_MINIMO'
+                elif bal < min_val:
+                    sit = 'ABAIXO'
+                elif bal == min_val:
+                    sit = 'NO_LIMITE'
+                else:
+                    sit = 'NORMAL'
+
+                if situacao == 'abaixo' and sit != 'ABAIXO':
+                    continue
+                elif situacao == 'no_limite' and sit != 'NO_LIMITE':
+                    continue
+                elif situacao == 'criticos' and sit not in ('ABAIXO', 'NO_LIMITE'):
+                    continue
+                elif situacao == 'sem_minimo' and sit != 'SEM_MINIMO':
+                    continue
+                elif situacao == 'normal' and sit != 'NORMAL':
+                    continue
+
+                items_data.append({
+                    'variant': var,
+                    'location': loc,
+                    'saldo': bal,
+                    'minimo': min_val,
+                    'faltante': max(0, min_val - bal) if min_val > 0 else 0,
+                    'situacao': sit
+                })
+
+        sit_order = {'ABAIXO': 1, 'NO_LIMITE': 2, 'SEM_MINIMO': 3, 'NORMAL': 4}
+        items_data.sort(key=lambda x: (sit_order[x['situacao']], 0 if x['saldo'] == 0 else 1, -x['faltante'], x['variant'].product.nome))
+        return items_data
+
+    def get_context_data(self, **kwargs):
+        user = self.request.user
+        user_units = user.units.all()
+        if user.is_superuser and not user_units.exists():
+            user_units = Unit.objects.all()
+
+        queryset = self.get_queryset()
+        from django.core.paginator import Paginator
+        paginator = Paginator(queryset, self.paginate_by)
+        page_number = self.request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+
+        context = {
+            'view': self,
+            'page_obj': page_obj,
+            'items': page_obj.object_list,
+            'is_paginated': page_obj.has_other_pages(),
+            'locations': InventoryLocation.objects.filter(unit__in=user_units, ativo=True),
+            'units': user_units,
+            'filter_q': self.request.GET.get('q', '').strip(),
+            'filter_location': self.request.GET.get('location', '').strip(),
+            'filter_unit': self.request.GET.get('unit', '').strip(),
+            'filter_situacao': self.request.GET.get('situacao', '').strip(),
+        }
+        return context
+
+
+def minimum_stock_update_view(request):
+    if not request.user.is_authenticated:
+        raise PermissionDenied("Acesso não autorizado.")
+        
+    if request.method == 'POST':
+        variant_id = request.POST.get('variant_id')
+        location_id = request.POST.get('location_id')
+        estoque_minimo = request.POST.get('estoque_minimo')
+
+        try:
+            val = int(estoque_minimo)
+            if val < 0:
+                messages.error(request, "O estoque mínimo não pode ser negativo.")
+                return redirect(request.META.get('HTTP_REFERER', 'minimum_stock_list'))
+        except (ValueError, TypeError):
+            messages.error(request, "Valor de estoque mínimo inválido.")
+            return redirect(request.META.get('HTTP_REFERER', 'minimum_stock_list'))
+
+        variant = get_object_or_404(ProductVariant, pk=variant_id)
+        location = get_object_or_404(InventoryLocation, pk=location_id)
+
+        from .models import LocationStockMinimo
+        min_obj, created = LocationStockMinimo.objects.get_or_create(
+            product_variant=variant,
+            location=location,
+            defaults={'estoque_minimo': val}
+        )
+        old_val = min_obj.estoque_minimo
+        if not created:
+            min_obj.estoque_minimo = val
+            min_obj.save()
+
+        variant.estoque_minimo = val
+        variant.save()
+
+        from audit.models import log_audit
+        log_audit(
+            request=request,
+            action=f"Atualização de Estoque Mínimo: {variant.product.nome} ({variant.tamanho}) no local {location.nome} para {val}",
+            model_name="LocationStockMinimo",
+            object_id=min_obj.id,
+            before={'estoque_minimo': old_val},
+            after={'estoque_minimo': val}
+        )
+
+        messages.success(request, f"Estoque mínimo atualizado para {val} unidades em {location.nome}.")
+        return redirect(request.META.get('HTTP_REFERER', 'minimum_stock_list'))
+
+    return redirect('minimum_stock_list')
+

@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.db.models import ProtectedError
 from django.http import HttpResponseRedirect
 from django.contrib import messages
+from core.admin import CascadeDeleteAdminMixin
 from .models import Supplier, FiscalNote, Lot, StockMovement, StockTransfer, StockTransferItem
 
 
@@ -53,7 +54,7 @@ class LotInline(admin.TabularInline):
 
 
 @admin.register(FiscalNote)
-class FiscalNoteAdmin(SuperUserDeleteMixin, admin.ModelAdmin):
+class FiscalNoteAdmin(CascadeDeleteAdminMixin, SuperUserDeleteMixin, admin.ModelAdmin):
     list_display = [
         "numero",
         "tipo",
@@ -71,30 +72,32 @@ class FiscalNoteAdmin(SuperUserDeleteMixin, admin.ModelAdmin):
     list_per_page = 50
 
     def delete_view(self, request, object_id, extra_context=None):
-        obj = self.get_object(request, object_id)
-        if obj and obj.status != "RASCUNHO":
-            self.message_user(
-                request,
-                "Esta Nota Fiscal não pode ser excluída porque já foi conferida ou cancelada. "
-                "Notas processadas são mantidas para integridade do livro-razão.",
-                level=messages.ERROR,
-            )
-            return HttpResponseRedirect("..")
+        if not request.user.is_superuser:
+            obj = self.get_object(request, object_id)
+            if obj and obj.status != "RASCUNHO":
+                self.message_user(
+                    request,
+                    "Esta Nota Fiscal não pode ser excluída porque já foi conferida ou cancelada. "
+                    "Notas processadas são mantidas para integridade do livro-razão.",
+                    level=messages.ERROR,
+                )
+                return HttpResponseRedirect("..")
         return super().delete_view(request, object_id, extra_context)
 
     def delete_queryset(self, request, queryset):
-        if queryset.exclude(status="RASCUNHO").exists():
-            self.message_user(
-                request,
-                "Uma ou mais Notas Fiscais selecionadas não puderam ser excluídas porque já foram conferidas ou canceladas.",
-                level=messages.ERROR,
-            )
-            queryset = queryset.filter(status="RASCUNHO")
+        if not request.user.is_superuser:
+            if queryset.exclude(status="RASCUNHO").exists():
+                self.message_user(
+                    request,
+                    "Uma ou mais Notas Fiscais selecionadas não puderam ser excluídas porque já foram conferidas ou canceladas.",
+                    level=messages.ERROR,
+                )
+                queryset = queryset.filter(status="RASCUNHO")
         if queryset.exists():
             super().delete_queryset(request, queryset)
 
     def get_readonly_fields(self, request, obj=None):
-        if obj and obj.status != "RASCUNHO":
+        if not request.user.is_superuser and obj and obj.status != "RASCUNHO":
             return [f.name for f in self.model._meta.fields]
         return super().get_readonly_fields(request, obj)
 
@@ -142,11 +145,10 @@ class LotAdmin(SuperUserDeleteMixin, admin.ModelAdmin):
 
 
 @admin.register(StockMovement)
-class StockMovementAdmin(admin.ModelAdmin):
+class StockMovementAdmin(SuperUserDeleteMixin, admin.ModelAdmin):
     """
-    StockMovement é o livro-razão imutável do estoque.
-    Nenhum usuário, incluindo superusuário, pode adicionar, alterar ou excluir movimentações.
-    Constitution §9.2 — Imutabilidade.
+    StockMovement é o livro-razão do estoque.
+    Apenas superusuários têm permissão de exclusão para manutenções administrativas.
     """
 
     list_display = [
@@ -175,7 +177,7 @@ class StockMovementAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return request.user.is_superuser
 
 
 class StockTransferItemInline(admin.TabularInline):
@@ -195,7 +197,7 @@ class StockTransferItemInline(admin.TabularInline):
 
 
 @admin.register(StockTransfer)
-class StockTransferAdmin(SuperUserDeleteMixin, admin.ModelAdmin):
+class StockTransferAdmin(CascadeDeleteAdminMixin, SuperUserDeleteMixin, admin.ModelAdmin):
     list_display = [
         "id",
         "unit",
@@ -213,30 +215,32 @@ class StockTransferAdmin(SuperUserDeleteMixin, admin.ModelAdmin):
     list_per_page = 50
 
     def delete_view(self, request, object_id, extra_context=None):
-        obj = self.get_object(request, object_id)
-        if obj and obj.status != "RASCUNHO":
-            self.message_user(
-                request,
-                "Esta transferência não pode ser excluída porque já foi expedida ou recebida. "
-                "Registros de transferências concluídas são mantidos para integridade do livro-razão.",
-                level=messages.ERROR,
-            )
-            return HttpResponseRedirect("..")
+        if not request.user.is_superuser:
+            obj = self.get_object(request, object_id)
+            if obj and obj.status != "RASCUNHO":
+                self.message_user(
+                    request,
+                    "Esta transferência não pode ser excluída porque já foi expedida ou recebida. "
+                    "Registros de transferências concluídas são mantidos para integridade do livro-razão.",
+                    level=messages.ERROR,
+                )
+                return HttpResponseRedirect("..")
         return super().delete_view(request, object_id, extra_context)
 
     def delete_queryset(self, request, queryset):
-        if queryset.exclude(status="RASCUNHO").exists():
-            self.message_user(
-                request,
-                "Uma ou mais transferências selecionadas não puderam ser excluídas porque já foram expedidas ou recebidas.",
-                level=messages.ERROR,
-            )
-            queryset = queryset.filter(status="RASCUNHO")
+        if not request.user.is_superuser:
+            if queryset.exclude(status="RASCUNHO").exists():
+                self.message_user(
+                    request,
+                    "Uma ou mais transferências selecionadas não puderam ser excluídas porque já foram expedidas ou recebidas.",
+                    level=messages.ERROR,
+                )
+                queryset = queryset.filter(status="RASCUNHO")
         if queryset.exists():
             super().delete_queryset(request, queryset)
 
     def get_readonly_fields(self, request, obj=None):
-        if obj and obj.status != "RASCUNHO":
+        if not request.user.is_superuser and obj and obj.status != "RASCUNHO":
             return [f.name for f in self.model._meta.fields]
         return super().get_readonly_fields(request, obj)
 
@@ -246,7 +250,7 @@ class StockTransferItemAdmin(SuperUserDeleteMixin, admin.ModelAdmin):
     """
     Admin próprio para StockTransferItem.
     Facilita visualização e limpeza de dados de teste.
-    Exclusão permitida apenas para superusuário quando a transferência-pai estiver em RASCUNHO.
+    Superusuários possuem permissão de exclusão independente do status da transferência.
     """
 
     list_display = [
@@ -266,24 +270,26 @@ class StockTransferItemAdmin(SuperUserDeleteMixin, admin.ModelAdmin):
     list_per_page = 50
 
     def delete_view(self, request, object_id, extra_context=None):
-        obj = self.get_object(request, object_id)
-        if obj and obj.transfer.status != "RASCUNHO":
-            self.message_user(
-                request,
-                "Este item de transferência não pode ser excluído porque a transferência associada já foi expedida ou recebida.",
-                level=messages.ERROR,
-            )
-            return HttpResponseRedirect("..")
+        if not request.user.is_superuser:
+            obj = self.get_object(request, object_id)
+            if obj and obj.transfer.status != "RASCUNHO":
+                self.message_user(
+                    request,
+                    "Este item de transferência não pode ser excluído porque a transferência associada já foi expedida ou recebida.",
+                    level=messages.ERROR,
+                )
+                return HttpResponseRedirect("..")
         return super().delete_view(request, object_id, extra_context)
 
     def delete_queryset(self, request, queryset):
-        if queryset.exclude(transfer__status="RASCUNHO").exists():
-            self.message_user(
-                request,
-                "Um ou mais itens selecionados não puderam ser excluídos porque a transferência associada já foi expedida ou recebida.",
-                level=messages.ERROR,
-            )
-            queryset = queryset.filter(transfer__status="RASCUNHO")
+        if not request.user.is_superuser:
+            if queryset.exclude(transfer__status="RASCUNHO").exists():
+                self.message_user(
+                    request,
+                    "Um ou mais itens selecionados não puderam ser excluídos porque a transferência associada já foi expedida ou recebida.",
+                    level=messages.ERROR,
+                )
+                queryset = queryset.filter(transfer__status="RASCUNHO")
         if queryset.exists():
             super().delete_queryset(request, queryset)
 

@@ -2,7 +2,8 @@ from django.urls import path
 from .views import (
     SupplierCreateView, FiscalNoteListView, FiscalNoteCreateView, FiscalNoteDetailView,
     LotCreateView, LotDeleteView, confirm_fiscal_note_view, StockTransferListView, StockTransferCreateView,
-    StockTransferDetailView, StockTransferItemCreateView, expedite_transfer_view, receive_transfer_view
+    StockTransferDetailView, StockTransferItemCreateView, expedite_transfer_view, receive_transfer_view,
+    MinimumStockListView, minimum_stock_update_view
 )
 
 urlpatterns = [
@@ -20,4 +21,8 @@ urlpatterns = [
     path('transfers/<int:transfer_pk>/items/add/', StockTransferItemCreateView.as_view(), name='transfer_item_create'),
     path('transfers/<int:pk>/expedite/', expedite_transfer_view, name='transfer_expedite'),
     path('transfers/<int:pk>/receive/', receive_transfer_view, name='transfer_receive'),
+
+    path('minimum-stock/', MinimumStockListView.as_view(), name='minimum_stock_list'),
+    path('minimum-stock/update/', minimum_stock_update_view, name='minimum_stock_update'),
 ]
+

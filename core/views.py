@@ -52,24 +52,32 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         # Transferências pendentes
         pending_transfers = StockTransfer.objects.filter(unit__in=user_units, status='EXPEDIDA')
 
-        # EPIs abaixo do estoque mínimo
+        # EPIs abaixo ou no limite do estoque mínimo
         below_min = []
-        variants = ProductVariant.objects.filter(ativo=True)
+        variants = ProductVariant.objects.filter(ativo=True).select_related('product')
+        locations = InventoryLocation.objects.filter(unit__in=user_units, ativo=True).select_related('unit')
+        
+        from inventory.services import get_location_minimum_stock
         for var in variants:
-            # Para cada local Almoxarifado / SST nas unidades do usuário
-            for unit in user_units:
-                for loc in InventoryLocation.objects.filter(unit=unit, ativo=True):
-                    # Calcula saldo
-                    bal = StockMovement.objects.filter(location=loc, product_variant=var).aggregate(total=models.Sum('quantity'))['total'] or 0
-                    if bal < var.estoque_minimo:
-                        below_min.append({
-                            'product': var.product.nome,
-                            'tamanho': var.tamanho,
-                            'location': loc.nome,
-                            'unit': unit.codigo,
-                            'saldo': bal,
-                            'minimo': var.estoque_minimo
-                        })
+            for loc in locations:
+                bal = get_stock_balance(loc, var)
+                min_val = get_location_minimum_stock(loc, var)
+                if min_val > 0 and bal <= min_val:
+                    deficit = min_val - bal
+                    below_min.append({
+                        'product': var.product.nome,
+                        'ca': var.product.ca_numero or '',
+                        'tamanho': var.tamanho,
+                        'location': loc.nome,
+                        'unit': loc.unit.codigo,
+                        'saldo': bal,
+                        'minimo': min_val,
+                        'faltante': max(0, deficit),
+                        'situacao': 'ABAIXO' if bal < min_val else 'NO_LIMITE'
+                    })
+
+        # Ordenação por criticidade: (1) Saldo 0 primeiro, (2) Maior quantidade faltante, (3) Menor saldo
+        below_min.sort(key=lambda x: (0 if x['saldo'] == 0 else 1, -x['faltante'], x['saldo']))
 
         context.update({
             'bal_almox': bal_almox,
@@ -79,7 +87,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             'alerts_count': active_alerts.count(),
             'transfers_count': pending_transfers.count(),
             'active_alerts': active_alerts[:5],
-            'below_min': below_min[:5],
+            'below_min': below_min[:10],
             'active_alerts_count': active_alerts.count(),
         })
         return context

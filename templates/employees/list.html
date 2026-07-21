@@ -90,6 +90,11 @@
                     </td>
                     <td class="text-center">
                         <div class="d-flex justify-content-center gap-2">
+                            {% if emp.situacao == 'ATIVO' %}
+                            <a href="{% url 'delivery_create' %}?employee={{ emp.id }}" class="btn btn-sm btn-outline-success rounded-3" title="Entregar EPI" aria-label="Entregar EPI a {{ emp.nome_completo }}">
+                                <i class="bi bi-shield-fill-check"></i>
+                            </a>
+                            {% endif %}
                             <a href="{% url 'employee_detail' emp.id %}" class="btn btn-sm btn-outline-primary rounded-3" title="Visualizar Ficha">
                                 <i class="bi bi-eye-fill"></i>
                             </a>

@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.db.models import ProtectedError
 from django.http import HttpResponseRedirect
 from django.contrib import messages
+from core.admin import CascadeDeleteAdminMixin
 from .models import Product, ProductVariant, CertificadoAprovacao, CAEPISyncLog, PPEMatrix, ExtraordinaryPPE, PPEDelivery
 
 
@@ -54,7 +55,7 @@ class CertificadoAprovacaoAdmin(SuperUserDeleteMixin, admin.ModelAdmin):
 
 
 @admin.register(CAEPISyncLog)
-class CAEPISyncLogAdmin(admin.ModelAdmin):
+class CAEPISyncLogAdmin(SuperUserDeleteMixin, admin.ModelAdmin):
     list_display = [
         "id",
         "status",
@@ -79,7 +80,7 @@ class CAEPISyncLogAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return request.user.is_superuser
 
 
 
@@ -90,7 +91,7 @@ class ProductVariantInline(admin.TabularInline):
 
 
 @admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):
+class ProductAdmin(CascadeDeleteAdminMixin, admin.ModelAdmin):
     list_display = [
         "nome",
         "categoria",
@@ -107,15 +108,12 @@ class ProductAdmin(admin.ModelAdmin):
 
 
 @admin.register(ProductVariant)
-class ProductVariantAdmin(admin.ModelAdmin):
+class ProductVariantAdmin(CascadeDeleteAdminMixin, admin.ModelAdmin):
     list_display = ["product", "tamanho", "sku", "estoque_minimo", "ativo"]
     search_fields = ["sku", "product__nome"]
     list_filter = ["ativo"]
     ordering = ["product", "tamanho"]
     list_per_page = 50
-
-
-
 
 
 @admin.register(PPEMatrix)
@@ -153,11 +151,10 @@ class ExtraordinaryPPEAdmin(admin.ModelAdmin):
 
 
 @admin.register(PPEDelivery)
-class PPEDeliveryAdmin(admin.ModelAdmin):
+class PPEDeliveryAdmin(SuperUserDeleteMixin, admin.ModelAdmin):
     """
-    PPEDelivery é registro histórico imutável de natureza legal e trabalhista.
-    Nenhum usuário, incluindo superusuário, pode adicionar, alterar ou excluir entregas.
-    Constitution §10.5 — Entrega; §9.2 — Imutabilidade.
+    PPEDelivery é registro histórico de entrega de EPI.
+    Superusuários possuem permissão de exclusão para manutenção administrativa.
     """
 
     list_display = [
@@ -186,4 +183,4 @@ class PPEDeliveryAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return request.user.is_superuser

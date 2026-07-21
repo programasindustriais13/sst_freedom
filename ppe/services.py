@@ -92,7 +92,7 @@ def deliver_ppe(employee, product_variant, lot, quantity, user, data_entrega, na
         natureza_entrega=natureza_entrega,
         motivo_substituicao=motivo_substituicao,
         usuario_responsavel=user,
-        status_assinatura='PENDENTE'
+        status_assinatura='REGISTRADO_OPERADOR'
     )
 
     # 5. Gera a movimentação de saída do estoque SST

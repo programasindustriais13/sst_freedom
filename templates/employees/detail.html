@@ -141,9 +141,11 @@
                             <td>{{ delivery.data_prevista_troca|date:"d/m/Y" }}</td>
                             <td class="text-center">
                                 {% if delivery.status_assinatura == 'ASSINADO' %}
-                                <span class="badge bg-success" title="Ciência confirmada por {{ delivery.nome_trabalhador_confirmacao }}"><i class="bi bi-check-lg"></i> Assinado</span>
+                                <span class="badge bg-success" title="Ciência confirmada por {{ delivery.nome_trabalhador_confirmacao }} em {{ delivery.confirmacao_data_hora|date:'d/m/Y' }}"><i class="bi bi-check-lg"></i> Assinado</span>
+                                {% elif delivery.status_assinatura == 'REGISTRADO_OPERADOR' %}
+                                <span class="badge bg-secondary" title="Entrega registrada diretamente pelo operador"><i class="bi bi-person-check"></i> Registrado p/ Operador</span>
                                 {% else %}
-                                <a href="{% url 'delivery_sign' delivery.id %}" class="badge bg-warning text-dark text-decoration-none"><i class="bi bi-clock"></i> Pendente</a>
+                                <span class="badge bg-info text-dark" title="Pendente"><i class="bi bi-clock"></i> Pendente</span>
                                 {% endif %}
                             </td>
                         </tr>

@@ -59,14 +59,14 @@ class PPEAdminSetupMixin:
 
 class PPEDeliveryAdminTest(PPEAdminSetupMixin, TestCase):
 
-    def test_superuser_nao_tem_permissao_excluir_ppe_delivery(self):
-        """T-009: PPEDelivery não tem permissão de exclusão para superusuário."""
+    def test_superuser_tem_permissao_excluir_ppe_delivery(self):
+        """Superusuário tem permissão de exclusão para PPEDelivery."""
         from ppe.admin import PPEDeliveryAdmin
         factory = RequestFactory()
         request = factory.get("/")
         request.user = self.superuser
         pda = PPEDeliveryAdmin(PPEDelivery, None)
-        self.assertFalse(pda.has_delete_permission(request))
+        self.assertTrue(pda.has_delete_permission(request))
 
     def test_superuser_nao_tem_permissao_adicionar_ppe_delivery(self):
         """PPEDelivery não tem permissão de adição para superusuário."""
@@ -127,14 +127,14 @@ class AuditLogAdminTest(TestCase):
             email="super2@test.com",
         )
 
-    def test_superuser_nao_tem_permissao_excluir_audit_log(self):
+    def test_superuser_tem_permissao_excluir_audit_log(self):
         from audit.admin import AuditLogAdmin
         from audit.models import AuditLog
         factory = RequestFactory()
         request = factory.get("/")
         request.user = self.superuser
         ala = AuditLogAdmin(AuditLog, None)
-        self.assertFalse(ala.has_delete_permission(request))
+        self.assertTrue(ala.has_delete_permission(request))
 
     def test_superuser_nao_tem_permissao_adicionar_audit_log(self):
         from audit.admin import AuditLogAdmin

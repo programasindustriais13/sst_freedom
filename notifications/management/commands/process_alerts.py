@@ -21,13 +21,15 @@ class Command(BaseCommand):
         variants = ProductVariant.objects.filter(ativo=True).select_related('product')
         locations = InventoryLocation.objects.filter(ativo=True).select_related('unit')
         
+        from inventory.services import get_location_minimum_stock
         for var in variants:
             for loc in locations:
                 bal = get_stock_balance(loc, var)
-                if bal < var.estoque_minimo:
+                min_val = get_location_minimum_stock(loc, var)
+                if min_val > 0 and bal < min_val:
                     # Gera alerta de estoque baixo
                     alert_title = f"Estoque Baixo: {var.product.nome} ({var.tamanho})"
-                    alert_msg = f"O local {loc.nome} possui saldo de {bal} unidades, abaixo do estoque mínimo de {var.estoque_minimo}."
+                    alert_msg = f"O local {loc.nome} ({loc.unit.codigo}) possui saldo de {bal} unidades, abaixo do estoque mínimo de {min_val}."
                     
                     # Deduplica
                     Alert.objects.get_or_create(

@@ -222,6 +222,7 @@ class PPEDelivery(models.Model):
         ('PENDENTE', 'Pendente de Ciência'),
         ('ASSINADO', 'Ciência Confirmada'),
         ('REJEITADO', 'Rejeitado pelo Colaborador'),
+        ('REGISTRADO_OPERADOR', 'Registrado pelo Operador (Sem Assinatura)'),
     )
 
     employee = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name='ppe_deliveries', verbose_name="Colaborador")

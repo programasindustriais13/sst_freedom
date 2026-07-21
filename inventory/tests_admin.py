@@ -102,14 +102,14 @@ class StockMovementAdminTest(InventoryAdminSetupMixin, TestCase):
             user=self.superuser,
         ), lot
 
-    def test_superuser_nao_tem_permissao_excluir_stock_movement(self):
-        """T-007: StockMovement não tem permissão de exclusão para superusuário."""
+    def test_superuser_tem_permissao_excluir_stock_movement(self):
+        """Superusuário tem permissão de exclusão para StockMovement."""
         from inventory.admin import StockMovementAdmin
         factory = RequestFactory()
         request = factory.get("/")
         request.user = self.superuser
         sma = StockMovementAdmin(StockMovement, None)
-        self.assertFalse(sma.has_delete_permission(request))
+        self.assertTrue(sma.has_delete_permission(request))
 
     def test_superuser_nao_tem_permissao_adicionar_stock_movement(self):
         """StockMovement não tem permissão de adição para superusuário."""
@@ -130,8 +130,8 @@ class StockMovementAdminTest(InventoryAdminSetupMixin, TestCase):
 
 class FiscalNoteAdminTest(InventoryAdminSetupMixin, TestCase):
 
-    def test_superuser_nao_pode_excluir_fiscal_note_conferida(self):
-        """T-010: FiscalNote com status CONFERIDA não pode ser excluída, mantendo a nota no banco."""
+    def test_superuser_pode_excluir_fiscal_note_conferida(self):
+        """Superusuário pode excluir FiscalNote com status CONFERIDA."""
         nota = FiscalNote.objects.create(
             supplier=self.supplier,
             unit=self.unit,
@@ -148,7 +148,8 @@ class FiscalNoteAdminTest(InventoryAdminSetupMixin, TestCase):
         self.client.force_login(self.superuser)
         url = reverse("admin:inventory_fiscalnote_delete", args=[nota.pk])
         response = self.client.post(url, {"post": "yes"}, follow=True)
-        self.assertTrue(FiscalNote.objects.filter(pk=nota.pk).exists())
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(FiscalNote.objects.filter(pk=nota.pk).exists())
 
     def test_superuser_pode_excluir_fiscal_note_rascunho(self):
         """T-012: Superusuário pode excluir FiscalNote em RASCUNHO."""
@@ -218,8 +219,8 @@ class StockTransferAdminTest(InventoryAdminSetupMixin, TestCase):
         transfer_rascunho = StockTransfer(status="RASCUNHO")
         self.assertTrue(sta.has_delete_permission(request, obj=transfer_rascunho))
 
-    def test_superuser_nao_pode_excluir_stock_transfer_expedida(self):
-        """Superusuário não pode excluir StockTransfer expedida, mantendo o registro no banco."""
+    def test_superuser_pode_excluir_stock_transfer_expedida(self):
+        """Superusuário pode excluir StockTransfer expedida."""
         transfer = StockTransfer.objects.create(
             unit=self.unit,
             source_location=self.loc_almox,
@@ -230,7 +231,8 @@ class StockTransferAdminTest(InventoryAdminSetupMixin, TestCase):
         self.client.force_login(self.superuser)
         url = reverse("admin:inventory_stocktransfer_delete", args=[transfer.pk])
         response = self.client.post(url, {"post": "yes"}, follow=True)
-        self.assertTrue(StockTransfer.objects.filter(pk=transfer.pk).exists())
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(StockTransfer.objects.filter(pk=transfer.pk).exists())
 
     def test_superuser_exclui_stock_transfer_rascunho(self):
         """T-014: Exclusão real de StockTransfer em RASCUNHO."""
