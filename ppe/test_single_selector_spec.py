@@ -315,3 +315,28 @@ class PPESingleSelectorSpecTestCase(TestCase):
         audit = AuditLog.objects.filter(object_id=delivery.id, model_name="PPEDelivery").first()
         self.assertIsNotNone(audit)
         self.assertIn("Entrega individual de EPI", audit.action)
+
+    def test_14_sidebar_active_link_isolation(self):
+        """14. Valida que ao acessar /ppe/deliveries/ apenas 'Entregas / Ficha EPI' fica ativo e não 'EPIs / Catálogo'."""
+        self.client.login(username="tecnico_sst", password="pwd")
+        
+        # Testando rota /ppe/deliveries/
+        res_deliveries = self.client.get(reverse('delivery_list'))
+        self.assertEqual(res_deliveries.status_code, 200)
+        content_deliveries = res_deliveries.content.decode('utf-8')
+        
+        # Verifica que Entregas está ativo
+        self.assertIn('class="nav-link-premium active" href="/ppe/deliveries/"', content_deliveries)
+        # Verifica que Catálogo NÃO está ativo (sem a classe active)
+        self.assertIn('class="nav-link-premium " href="/ppe/"', content_deliveries)
+
+        # Testando rota /ppe/ (Catálogo)
+        res_catalog = self.client.get(reverse('product_list'))
+        self.assertEqual(res_catalog.status_code, 200)
+        content_catalog = res_catalog.content.decode('utf-8')
+        
+        # Verifica que Catálogo está ativo
+        self.assertIn('class="nav-link-premium active" href="/ppe/"', content_catalog)
+        # Verifica que Entregas NÃO está ativo (sem a classe active)
+        self.assertIn('class="nav-link-premium " href="/ppe/deliveries/"', content_catalog)
+

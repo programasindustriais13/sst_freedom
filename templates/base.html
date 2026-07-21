@@ -35,7 +35,7 @@
             <a class="nav-link-premium {% if 'employees' in request.path %}active{% endif %}" href="{% url 'employee_list' %}">
                 <i class="bi bi-people-fill"></i> Colaboradores
             </a>
-            <a class="nav-link-premium {% if 'ppe' in request.path and 'delivery' not in request.path and 'matrices' not in request.path and 'matrix' not in request.path %}active{% endif %}" href="{% url 'product_list' %}">
+            <a class="nav-link-premium {% if 'ppe' in request.path and 'deliver' not in request.path and 'matrices' not in request.path and 'matrix' not in request.path %}active{% endif %}" href="{% url 'product_list' %}">
                 <i class="bi bi-shield-shaded"></i> EPIs / Catálogo
             </a>
             <a class="nav-link-premium {% if 'matrices' in request.path or 'matrix' in request.path %}active{% endif %}" href="{% url 'matrix_list' %}">
@@ -58,7 +58,7 @@
             </a>
 
             {% if request.user.is_tecnico or request.user.is_admin %}
-            <a class="nav-link-premium {% if 'ppe/deliveries' in request.path %}active{% endif %}" href="{% url 'delivery_list' %}">
+            <a class="nav-link-premium {% if 'deliver' in request.path %}active{% endif %}" href="{% url 'delivery_list' %}">
                 <i class="bi bi-journal-check"></i> Entregas / Ficha EPI
             </a>
             {% endif %}
