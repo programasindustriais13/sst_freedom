@@ -16,12 +16,59 @@ from inventory.services import get_stock_balance
 from employees.models import Employee
 from .models import Product, ProductVariant, CertificadoAprovacao, PPEMatrix, PPEDelivery, ExtraordinaryPPE
 from .services import deliver_ppe, confirm_delivery_signature, return_ppe, write_off_ppe
-from .forms import ProductForm, PPEMatrixForm, PPEMatrixBulkForm
+from .forms import ProductForm, PPEMatrixForm, PPEMatrixBulkForm, PPEMatrixFormSet, PPEMatrixFunctionForm
 
 class ProductListView(LoginRequiredMixin, ListView):
     model = Product
     template_name = "ppe/product_list.html"
     context_object_name = "products"
+    paginate_by = 20
+
+    def get_queryset(self):
+        queryset = Product.objects.all().order_by('nome')
+        
+        q = self.request.GET.get('q', '').strip()
+        if q:
+            queryset = queryset.filter(models.Q(nome__icontains=q) | models.Q(descricao__icontains=q))
+            
+        ca = self.request.GET.get('ca', '').strip()
+        if ca:
+            ca_clean = "".join([c for c in ca if c.isdigit()])
+            queryset = queryset.filter(ca_numero__icontains=ca_clean or ca)
+            
+        tipo = self.request.GET.get('tipo', '').strip()
+        if tipo:
+            queryset = queryset.filter(tipo_produto=tipo)
+            
+        categoria = self.request.GET.get('categoria', '').strip()
+        if categoria:
+            queryset = queryset.filter(categoria=categoria)
+            
+        fabricante = self.request.GET.get('fabricante', '').strip()
+        if fabricante:
+            queryset = queryset.filter(fabricante__icontains=fabricante)
+            
+        ativo = self.request.GET.get('ativo', '').strip()
+        if ativo == '1':
+            queryset = queryset.filter(ativo=True)
+        elif ativo == '0':
+            queryset = queryset.filter(ativo=False)
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        if not hasattr(self, 'object_list'):
+            self.object_list = self.get_queryset()
+        context = super().get_context_data(**kwargs)
+        context['tipo_choices'] = Product.TIPO_PRODUTO_CHOICES
+        context['categoria_choices'] = Product.CATEGORIA_CHOICES
+        context['filter_q'] = self.request.GET.get('q', '').strip()
+        context['filter_ca'] = self.request.GET.get('ca', '').strip()
+        context['filter_tipo'] = self.request.GET.get('tipo', '').strip()
+        context['filter_categoria'] = self.request.GET.get('categoria', '').strip()
+        context['filter_fabricante'] = self.request.GET.get('fabricante', '').strip()
+        context['filter_ativo'] = self.request.GET.get('ativo', '').strip()
+        return context
 
 
 class ProductCreateView(LoginRequiredMixin, CreateView):
@@ -187,13 +234,76 @@ class PPEDeliveryListView(LoginRequiredMixin, ListView):
     model = PPEDelivery
     template_name = "ppe/delivery_list.html"
     context_object_name = "deliveries"
+    paginate_by = 20
 
     def get_queryset(self):
         user = self.request.user
         user_units = user.units.all()
         if user.is_superuser and not user_units.exists():
             user_units = Unit.objects.all()
-        return PPEDelivery.objects.filter(unit__in=user_units).select_related('employee', 'product_variant__product', 'ca_entregue', 'lot')
+        
+        queryset = PPEDelivery.objects.filter(unit__in=user_units).select_related(
+            'employee', 'product_variant__product', 'ca_entregue', 'lot', 'setor', 'funcao'
+        )
+
+        data_inicio = self.request.GET.get('data_inicio', '').strip()
+        if data_inicio:
+            queryset = queryset.filter(data_entrega__gte=data_inicio)
+
+        data_fim = self.request.GET.get('data_fim', '').strip()
+        if data_fim:
+            queryset = queryset.filter(data_entrega__lte=data_fim)
+
+        q = self.request.GET.get('q', '').strip()
+        if q:
+            q_clean = "".join([c for c in q if c.isdigit()])
+            queryset = queryset.filter(
+                models.Q(employee__nome_completo__icontains=q) |
+                models.Q(employee__matricula__icontains=q) |
+                models.Q(employee__cpf__icontains=q_clean or q)
+            )
+
+        product_id = self.request.GET.get('product', '').strip()
+        if product_id:
+            queryset = queryset.filter(product_variant__product_id=product_id)
+
+        setor_id = self.request.GET.get('setor', '').strip()
+        if setor_id:
+            queryset = queryset.filter(setor_id=setor_id)
+
+        funcao_id = self.request.GET.get('funcao', '').strip()
+        if funcao_id:
+            queryset = queryset.filter(funcao_id=funcao_id)
+
+        status_ass = self.request.GET.get('status_assinatura', '').strip()
+        if status_ass:
+            queryset = queryset.filter(status_assinatura=status_ass)
+
+        return queryset.order_by('-data_entrega')
+
+    def get_context_data(self, **kwargs):
+        if not hasattr(self, 'object_list'):
+            self.object_list = self.get_queryset()
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        user_units = user.units.all()
+        if user.is_superuser and not user_units.exists():
+            user_units = Unit.objects.all()
+
+        from organizations.models import Sector, Function
+        context['products'] = Product.objects.filter(ativo=True).order_by('nome')
+        context['sectors'] = Sector.objects.filter(unit__in=user_units).order_by('nome')
+        context['functions'] = Function.objects.filter(ativo=True).order_by('nome')
+        context['status_choices'] = PPEDelivery.SIGN_STATUS
+        
+        context['filter_data_inicio'] = self.request.GET.get('data_inicio', '').strip()
+        context['filter_data_fim'] = self.request.GET.get('data_fim', '').strip()
+        context['filter_q'] = self.request.GET.get('q', '').strip()
+        context['filter_product'] = self.request.GET.get('product', '').strip()
+        context['filter_setor'] = self.request.GET.get('setor', '').strip()
+        context['filter_funcao'] = self.request.GET.get('funcao', '').strip()
+        context['filter_status_assinatura'] = self.request.GET.get('status_assinatura', '').strip()
+        return context
 
 
 class PPEDeliveryCreateView(LoginRequiredMixin, CreateView):
@@ -585,8 +695,7 @@ class PPEMatrixListView(LoginRequiredMixin, ListView):
         return context
 
 
-class PPEMatrixBulkCreateView(LoginRequiredMixin, FormView):
-    form_class = PPEMatrixBulkForm
+class PPEMatrixBulkCreateView(LoginRequiredMixin, View):
     template_name = "ppe/matrix_bulk_form.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -595,74 +704,70 @@ class PPEMatrixBulkCreateView(LoginRequiredMixin, FormView):
             raise PermissionDenied("Apenas Técnicos SST ou Administradores podem gerenciar a matriz de EPI.")
         return super().dispatch(request, *args, **kwargs)
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['title'] = "Nova Matriz de EPI por Função"
-        context['is_create'] = True
-        return context
-
-    def form_valid(self, form):
-        funcao = form.cleaned_data['funcao']
-        products = form.cleaned_data['products']
-        quantidade_padrao = form.cleaned_data['quantidade_padrao']
-        vida_util_dias = form.cleaned_data['vida_util_dias']
-        obrigatorio = form.cleaned_data['obrigatorio']
-        principal = form.cleaned_data['principal']
-        orientacoes = form.cleaned_data['orientacoes']
-
-        created_count = 0
-        updated_count = 0
+    def get(self, request, *args, **kwargs):
+        function_form = PPEMatrixFunctionForm(request.GET or None)
+        funcao_id = request.GET.get('funcao')
+        funcao = None
+        formset = None
+        if funcao_id:
+            funcao = Function.objects.filter(pk=funcao_id).first()
+            if funcao:
+                formset = PPEMatrixFormSet(instance=funcao, queryset=PPEMatrix.objects.filter(funcao=funcao, ativo=True))
         
-        with transaction.atomic():
-            for product in products:
-                # Procura ou cria a associação
-                entry, created = PPEMatrix.objects.get_or_create(
-                    funcao=funcao,
-                    product=product,
-                    defaults={
-                        'quantidade_padrao': quantidade_padrao,
-                        'vida_util_dias': vida_util_dias,
-                        'obrigatorio': obrigatorio,
-                        'principal': principal,
-                        'orientacoes': orientacoes,
-                        'ativo': True,
-                        'criado_por': self.request.user
-                    }
+        if not formset:
+            formset = PPEMatrixFormSet(queryset=PPEMatrix.objects.none())
+
+        return render(request, self.template_name, {
+            'title': "Nova Matriz de EPI por Função",
+            'is_create': True,
+            'function_form': function_form,
+            'formset': formset,
+            'funcao': funcao,
+        })
+
+    def post(self, request, *args, **kwargs):
+        function_form = PPEMatrixFunctionForm(request.POST)
+        funcao_id = request.POST.get('funcao')
+        funcao = get_object_or_404(Function, pk=funcao_id) if funcao_id else None
+        
+        formset = PPEMatrixFormSet(request.POST, instance=funcao) if funcao else PPEMatrixFormSet(request.POST)
+
+        if function_form.is_valid() and funcao and formset.is_valid():
+            with transaction.atomic():
+                instances = formset.save(commit=False)
+                for obj in instances:
+                    obj.funcao = funcao
+                    obj.ativo = True
+                    if not obj.criado_por_id:
+                        obj.criado_por = request.user
+                    obj.save()
+
+                for obj in formset.deleted_objects:
+                    obj.delete()
+
+                from audit.models import log_audit
+                log_audit(
+                    request=request,
+                    action=f"Criação/Atualização individual da matriz de EPI para a função: {funcao.nome}",
+                    model_name="PPEMatrix",
+                    object_id=funcao.id,
+                    before=None,
+                    after={'funcao': funcao.nome}
                 )
-                if created:
-                    created_count += 1
-                else:
-                    entry.ativo = True
-                    entry.quantidade_padrao = quantidade_padrao
-                    entry.vida_util_dias = vida_util_dias
-                    entry.obrigatorio = obrigatorio
-                    entry.principal = principal
-                    entry.orientacoes = orientacoes
-                    entry.save()
-                    updated_count += 1
 
-            # Gravar log de auditoria
-            from audit.models import log_audit
-            log_audit(
-                request=self.request,
-                action=f"Criação/Atualização em lote da matriz de EPI para a função: {funcao.nome}",
-                model_name="PPEMatrix",
-                object_id=funcao.id,
-                before=None,
-                after={
-                    'funcao': funcao.nome,
-                    'produtos_associados': [p.nome for p in products],
-                    'criados': created_count,
-                    'atualizados': updated_count
-                }
-            )
+            messages.success(request, f"Matriz da função {funcao.nome} salva com sucesso!")
+            return redirect('function_detail', pk=funcao.id)
 
-        messages.success(self.request, f"Matriz da função {funcao.nome} salva com sucesso! ({created_count} novos associados, {updated_count} atualizados)")
-        return redirect('function_detail', pk=funcao.id)
+        return render(request, self.template_name, {
+            'title': "Nova Matriz de EPI por Função",
+            'is_create': True,
+            'function_form': function_form,
+            'formset': formset,
+            'funcao': funcao,
+        })
 
 
-class PPEMatrixBulkUpdateView(LoginRequiredMixin, FormView):
-    form_class = PPEMatrixBulkForm
+class PPEMatrixBulkUpdateView(LoginRequiredMixin, View):
     template_name = "ppe/matrix_bulk_form.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -672,101 +777,49 @@ class PPEMatrixBulkUpdateView(LoginRequiredMixin, FormView):
         self.funcao = get_object_or_404(Function, pk=self.kwargs.get('function_pk'))
         return super().dispatch(request, *args, **kwargs)
 
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['is_update'] = True
-        return kwargs
+    def get(self, request, *args, **kwargs):
+        formset = PPEMatrixFormSet(instance=self.funcao, queryset=PPEMatrix.objects.filter(funcao=self.funcao, ativo=True))
+        return render(request, self.template_name, {
+            'title': f"Editar Matriz de EPI por Função: {self.funcao.nome}",
+            'is_create': False,
+            'funcao': self.funcao,
+            'formset': formset,
+        })
 
-    def get_initial(self):
-        initial = super().get_initial()
-        initial['funcao'] = self.funcao
-        active_entries = PPEMatrix.objects.filter(funcao=self.funcao, ativo=True)
-        initial['products'] = [entry.product.id for entry in active_entries]
-        
-        first_entry = active_entries.first()
-        if first_entry:
-            initial['quantidade_padrao'] = first_entry.quantidade_padrao
-            initial['vida_util_dias'] = first_entry.vida_util_dias
-            initial['obrigatorio'] = first_entry.obrigatorio
-            initial['principal'] = first_entry.principal
-            initial['orientacoes'] = first_entry.orientacoes
-        return initial
+    def post(self, request, *args, **kwargs):
+        formset = PPEMatrixFormSet(request.POST, instance=self.funcao)
+        if formset.is_valid():
+            with transaction.atomic():
+                instances = formset.save(commit=False)
+                for obj in instances:
+                    obj.funcao = self.funcao
+                    obj.ativo = True
+                    if not obj.criado_por_id:
+                        obj.criado_por = request.user
+                    obj.save()
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['title'] = f"Editar Matriz de EPI por Função: {self.funcao.nome}"
-        context['funcao'] = self.funcao
-        context['is_create'] = False
-        return context
+                for obj in formset.deleted_objects:
+                    obj.delete()
 
-    def form_valid(self, form):
-        products = form.cleaned_data['products']
-        quantidade_padrao = form.cleaned_data['quantidade_padrao']
-        vida_util_dias = form.cleaned_data['vida_util_dias']
-        obrigatorio = form.cleaned_data['obrigatorio']
-        principal = form.cleaned_data['principal']
-        orientacoes = form.cleaned_data['orientacoes']
-
-        from audit.models import log_audit
-        old_active_products = list(PPEMatrix.objects.filter(funcao=self.funcao, ativo=True).values_list('product__nome', flat=True))
-
-        with transaction.atomic():
-            # 1. Inativa os EPIs que foram desmarcados
-            current_active = PPEMatrix.objects.filter(funcao=self.funcao, ativo=True)
-            deactivated_count = 0
-            for entry in current_active:
-                if entry.product not in products:
-                    entry.ativo = False
-                    entry.save()
-                    deactivated_count += 1
-
-            # 2. Cria ou Reativa os marcados
-            created_count = 0
-            reactivated_count = 0
-            for product in products:
-                entry, created = PPEMatrix.objects.get_or_create(
-                    funcao=self.funcao,
-                    product=product,
-                    defaults={
-                        'quantidade_padrao': quantidade_padrao,
-                        'vida_util_dias': vida_util_dias,
-                        'obrigatorio': obrigatorio,
-                        'principal': principal,
-                        'orientacoes': orientacoes,
-                        'ativo': True,
-                        'criado_por': self.request.user
-                    }
+                from audit.models import log_audit
+                log_audit(
+                    request=request,
+                    action=f"Atualização individual da matriz de EPI para a função: {self.funcao.nome}",
+                    model_name="PPEMatrix",
+                    object_id=self.funcao.id,
+                    before=None,
+                    after={'funcao': self.funcao.nome}
                 )
-                if created:
-                    created_count += 1
-                else:
-                    if not entry.ativo:
-                        entry.ativo = True
-                        entry.quantidade_padrao = quantidade_padrao
-                        entry.vida_util_dias = vida_util_dias
-                        entry.obrigatorio = obrigatorio
-                        entry.principal = principal
-                        entry.orientacoes = orientacoes
-                        entry.save()
-                        reactivated_count += 1
 
-            # Grava auditoria
-            log_audit(
-                request=self.request,
-                action=f"Atualização em lote da matriz de EPI para a função: {self.funcao.nome}",
-                model_name="PPEMatrix",
-                object_id=self.funcao.id,
-                before={'produtos_ativos_anterior': old_active_products},
-                after={
-                    'produtos_ativos_novo': [p.nome for p in products],
-                    'desativados': deactivated_count,
-                    'criados': created_count,
-                    'reativados': reactivated_count
-                }
-            )
+            messages.success(request, f"Matriz da função {self.funcao.nome} atualizada com sucesso!")
+            return redirect('function_detail', pk=self.funcao.id)
 
-        messages.success(self.request, f"Matriz da função {self.funcao.nome} atualizada com sucesso! (Desativados: {deactivated_count}, Novos: {created_count}, Reativados: {reactivated_count})")
-        return redirect('function_detail', pk=self.funcao.id)
+        return render(request, self.template_name, {
+            'title': f"Editar Matriz de EPI por Função: {self.funcao.nome}",
+            'is_create': False,
+            'funcao': self.funcao,
+            'formset': formset,
+        })
 
 
 class PPEMatrixBulkDeleteView(LoginRequiredMixin, View):

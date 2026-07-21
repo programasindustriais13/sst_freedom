@@ -26,14 +26,80 @@ class FiscalNoteListView(LoginRequiredMixin, ListView):
     model = FiscalNote
     template_name = "inventory/nfs_list.html"
     context_object_name = "notes"
-    
+    paginate_by = 20
+
     def get_queryset(self):
         user = self.request.user
         user_units = user.units.all()
         if user.is_superuser and not user_units.exists():
             from organizations.models import Unit
             user_units = Unit.objects.all()
-        return FiscalNote.objects.filter(unit__in=user_units).select_related('supplier', 'unit', 'centro_custo')
+
+        queryset = FiscalNote.objects.filter(unit__in=user_units).select_related('supplier', 'unit', 'centro_custo')
+
+        numero = self.request.GET.get('numero', '').strip()
+        if numero:
+            queryset = queryset.filter(numero__icontains=numero)
+
+        supplier_id = self.request.GET.get('supplier', '').strip()
+        if supplier_id:
+            queryset = queryset.filter(supplier_id=supplier_id)
+
+        data_inicio = self.request.GET.get('data_inicio', '').strip()
+        if data_inicio:
+            queryset = queryset.filter(data_recebimento__gte=data_inicio)
+
+        data_fim = self.request.GET.get('data_fim', '').strip()
+        if data_fim:
+            queryset = queryset.filter(data_recebimento__lte=data_fim)
+
+        cc_id = self.request.GET.get('centro_custo', '').strip()
+        if cc_id:
+            queryset = queryset.filter(centro_custo_id=cc_id)
+
+        tipo = self.request.GET.get('tipo', '').strip()
+        if tipo:
+            queryset = queryset.filter(tipo=tipo)
+
+        status_nf = self.request.GET.get('status', '').strip()
+        if status_nf:
+            queryset = queryset.filter(status=status_nf)
+
+        q = self.request.GET.get('q', '').strip()
+        if q:
+            queryset = queryset.filter(
+                models.Q(numero__icontains=q) |
+                models.Q(chave_acesso__icontains=q) |
+                models.Q(supplier__razao_social__icontains=q)
+            )
+
+        return queryset.order_by('-data_recebimento')
+
+    def get_context_data(self, **kwargs):
+        if not hasattr(self, 'object_list'):
+            self.object_list = self.get_queryset()
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        user_units = user.units.all()
+        if user.is_superuser and not user_units.exists():
+            from organizations.models import Unit
+            user_units = Unit.objects.all()
+
+        from organizations.models import CostCenter
+        context['suppliers'] = Supplier.objects.filter(ativo=True).order_by('razao_social')
+        context['cost_centers'] = CostCenter.objects.filter(company__units__in=user_units).distinct().order_by('nome')
+        context['tipo_choices'] = FiscalNote.TIPO_CHOICES
+        context['status_choices'] = FiscalNote.STATUS_CHOICES
+        
+        context['filter_numero'] = self.request.GET.get('numero', '').strip()
+        context['filter_supplier'] = self.request.GET.get('supplier', '').strip()
+        context['filter_data_inicio'] = self.request.GET.get('data_inicio', '').strip()
+        context['filter_data_fim'] = self.request.GET.get('data_fim', '').strip()
+        context['filter_centro_custo'] = self.request.GET.get('centro_custo', '').strip()
+        context['filter_tipo'] = self.request.GET.get('tipo', '').strip()
+        context['filter_status'] = self.request.GET.get('status', '').strip()
+        context['filter_q'] = self.request.GET.get('q', '').strip()
+        return context
 
 
 class FiscalNoteCreateView(LoginRequiredMixin, CreateView):

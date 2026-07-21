@@ -1,5 +1,6 @@
 from django import forms
 from .models import Product, PPEMatrix, ProductVariant
+from organizations.models import Function
 
 class ProductForm(forms.ModelForm):
     class Meta:
@@ -90,6 +91,82 @@ class PPEMatrixForm(forms.ModelForm):
                 self.add_error('product', "Este EPI já está cadastrado na matriz de recomendação para esta função.")
 
         return cleaned_data
+
+
+class PPEMatrixItemForm(forms.ModelForm):
+    class Meta:
+        model = PPEMatrix
+        fields = ['product', 'vida_util_dias', 'obrigatorio', 'principal']
+        widgets = {
+            'product': forms.Select(attrs={'class': 'form-select form-control-premium ppe-product-select'}),
+            'vida_util_dias': forms.NumberInput(attrs={'class': 'form-control form-control-premium', 'min': '1', 'placeholder': 'Dias'}),
+            'obrigatorio': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'principal': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+        labels = {
+            'product': 'EPI',
+            'vida_util_dias': 'Vida útil estimada (dias)',
+            'obrigatorio': 'Obrigatório',
+            'principal': 'EPI principal da função',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['product'].queryset = Product.objects.filter(tipo_produto='EPI', ativo=True).order_by('nome')
+        if not self.instance or not self.instance.pk:
+            self.fields['vida_util_dias'].initial = 365
+            self.fields['obrigatorio'].initial = True
+            self.fields['principal'].initial = True
+
+    def clean_vida_util_dias(self):
+        vud = self.cleaned_data.get('vida_util_dias')
+        if vud is None or vud <= 0:
+            raise forms.ValidationError("A vida útil deve ser um número inteiro positivo maior que zero.")
+        return vud
+
+
+class BasePPEMatrixFormSet(forms.BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        
+        products_seen = set()
+        active_count = 0
+        for form in self.forms:
+            if form.cleaned_data and not form.cleaned_data.get('DELETE', False):
+                product = form.cleaned_data.get('product')
+                if product:
+                    active_count += 1
+                    if product.id in products_seen:
+                        form.add_error('product', f"O EPI '{product.nome}' foi incluído mais de uma vez nesta função.")
+                    else:
+                        products_seen.add(product.id)
+        if active_count == 0:
+            raise forms.ValidationError("Adicione pelo menos um EPI recomendado para a matriz da função.")
+
+
+PPEMatrixFormSet = forms.inlineformset_factory(
+    Function,
+    PPEMatrix,
+    form=PPEMatrixItemForm,
+    formset=BasePPEMatrixFormSet,
+    extra=1,
+    can_delete=True
+)
+
+
+class PPEMatrixFunctionForm(forms.Form):
+    funcao = forms.ModelChoiceField(
+        queryset=None,
+        label="Função/Cargo",
+        widget=forms.Select(attrs={'class': 'form-select form-control-premium'})
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from organizations.models import Function
+        self.fields['funcao'].queryset = Function.objects.filter(ativo=True).order_by('nome')
 
 
 class PPEMatrixBulkForm(forms.Form):

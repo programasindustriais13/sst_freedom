@@ -8,6 +8,7 @@ from django.contrib import messages
 from django.db.models import Q
 from organizations.models import Unit, Sector, CostCenter, Function
 from .models import Employee, EmployeeHistory
+from .forms import EmployeeForm
 
 class EmployeeListView(LoginRequiredMixin, ListView):
     model = Employee
@@ -63,12 +64,7 @@ class EmployeeListView(LoginRequiredMixin, ListView):
 
 class EmployeeCreateView(LoginRequiredMixin, CreateView):
     model = Employee
-    fields = [
-        'company', 'unit', 'matricula', 'nome_completo', 'cpf',
-        'funcao', 'setor', 'centro_custo', 'turno', 'data_admissao',
-        'situacao', 'telefone', 'email', 'tamanho_camisa', 'tamanho_calca',
-        'num_calcado', 'tamanho_luva', 'modelo_farda', 'observacoes'
-    ]
+    form_class = EmployeeForm
     template_name = "employees/form.html"
 
     def get_form(self, form_class=None):
@@ -113,12 +109,7 @@ class EmployeeCreateView(LoginRequiredMixin, CreateView):
 
 class EmployeeUpdateView(LoginRequiredMixin, UpdateView):
     model = Employee
-    fields = [
-        'company', 'unit', 'matricula', 'nome_completo', 'cpf',
-        'funcao', 'setor', 'centro_custo', 'turno', 'data_admissao',
-        'situacao', 'data_desligamento', 'telefone', 'email', 'tamanho_camisa',
-        'tamanho_calca', 'num_calcado', 'tamanho_luva', 'modelo_farda', 'observacoes'
-    ]
+    form_class = EmployeeForm
     template_name = "employees/form.html"
 
     def get_form(self, form_class=None):

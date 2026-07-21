@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load query_transform %}
 
 {% block title %}Notas Fiscais - SST Freedom{% endblock %}
 
@@ -11,12 +12,76 @@
     <h1>Notas Fiscais de Compra</h1>
     <div class="d-flex gap-2">
         <a href="{% url 'supplier_create' %}" class="btn btn-outline-primary btn-premium">
-            <i class="bi bi-plus-lg"></i> Fornecedor
+            <i class="bi bi-plus-lg me-1"></i> Fornecedor
         </a>
         <a href="{% url 'fiscal_note_create' %}" class="btn btn-premium btn-premium-primary">
             <i class="bi bi-file-earmark-plus-fill me-2"></i> Nova Nota Fiscal
         </a>
     </div>
+</div>
+
+<!-- Card de Filtros -->
+<div class="card-premium mb-4">
+    <form method="get" action="{% url 'fiscal_note_list' %}">
+        <div class="row g-3">
+            <div class="col-12 col-md-3">
+                <label class="form-label text-secondary small fw-semibold">Número da NF / Recibo</label>
+                <input type="text" name="numero" class="form-control form-control-premium" value="{{ filter_numero }}" placeholder="Número da nota...">
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label text-secondary small fw-semibold">Fornecedor</label>
+                <select name="supplier" class="form-select form-control-premium">
+                    <option value="">-- Todos os Fornecedores --</option>
+                    {% for sup in suppliers %}
+                    <option value="{{ sup.id }}" {% if filter_supplier|stringformat:"s" == sup.id|stringformat:"s" %}selected{% endif %}>{{ sup.razao_social }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label text-secondary small fw-semibold">Tipo de Documento</label>
+                <select name="tipo" class="form-select form-control-premium">
+                    <option value="">-- Todos --</option>
+                    {% for code, label in tipo_choices %}
+                    <option value="{{ code }}" {% if filter_tipo == code %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label text-secondary small fw-semibold">Status</label>
+                <select name="status" class="form-select form-control-premium">
+                    <option value="">-- Todos --</option>
+                    {% for code, label in status_choices %}
+                    <option value="{{ code }}" {% if filter_status == code %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label text-secondary small fw-semibold">Data Recebimento De</label>
+                <input type="date" name="data_inicio" class="form-control form-control-premium" value="{{ filter_data_inicio }}">
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label text-secondary small fw-semibold">Data Recebimento Até</label>
+                <input type="date" name="data_fim" class="form-control form-control-premium" value="{{ filter_data_fim }}">
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label text-secondary small fw-semibold">Centro de Custo</label>
+                <select name="centro_custo" class="form-select form-control-premium">
+                    <option value="">-- Todos --</option>
+                    {% for cc in cost_centers %}
+                    <option value="{{ cc.id }}" {% if filter_centro_custo|stringformat:"s" == cc.id|stringformat:"s" %}selected{% endif %}>{{ cc.codigo }} - {{ cc.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-3 d-flex align-items-end justify-content-end gap-2">
+                <button type="submit" class="btn btn-premium btn-premium-primary px-4">
+                    <i class="bi bi-funnel-fill me-1"></i> Filtrar
+                </button>
+                <a href="{% url 'fiscal_note_list' %}" class="btn btn-outline-secondary btn-premium px-3">
+                    <i class="bi bi-x-circle me-1"></i> Limpar Filtros
+                </a>
+            </div>
+        </div>
+    </form>
 </div>
 
 <div class="card-premium">
@@ -61,11 +126,26 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="7" class="text-center text-muted border-0 py-4">Nenhuma nota fiscal registrada.</td>
+                    <td colspan="7" class="text-center text-muted border-0 py-4">Nenhuma nota fiscal encontrada com os filtros aplicados.</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+
+    {% if is_paginated %}
+    <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top" style="border-color: var(--border-default) !important;">
+        <span class="text-muted small">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?{% url_replace page=page_obj.previous_page_number %}">&laquo; Anterior</a></li>
+            {% endif %}
+            <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+            {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?{% url_replace page=page_obj.next_page_number %}">Próxima &raquo;</a></li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

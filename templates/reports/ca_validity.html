@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load query_transform %}
 
 {% block title %}Vencimentos de C.A. - SST Freedom{% endblock %}
 
@@ -11,6 +12,51 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h1>Relatório de Validades de C.A.</h1>
     <a href="{% url 'report_list' %}" class="btn btn-outline-secondary btn-premium">Voltar</a>
+</div>
+
+<!-- Card de Filtros -->
+<div class="card-premium mb-4">
+    <form method="get" action="{% url 'report_ca_validity' %}">
+        <div class="row g-3">
+            <div class="col-12 col-md-3">
+                <label class="form-label text-secondary small fw-semibold">Número do C.A.</label>
+                <input type="text" name="numero" class="form-control form-control-premium" value="{{ filter_numero }}" placeholder="Número do C.A....">
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label text-secondary small fw-semibold">Busca por Equipamento / Fabricante</label>
+                <input type="text" name="q" class="form-control form-control-premium" value="{{ filter_q }}" placeholder="Equipamento ou fabricante...">
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label text-secondary small fw-semibold">Situação do C.A.</label>
+                <select name="situacao" class="form-select form-control-premium">
+                    <option value="">-- Todas --</option>
+                    <option value="VALIDO" {% if filter_situacao == 'VALIDO' %}selected{% endif %}>Válidos</option>
+                    <option value="PROXIMO" {% if filter_situacao == 'PROXIMO' %}selected{% endif %}>Próximos do Vencimento (60 dias)</option>
+                    <option value="VENCIDO" {% if filter_situacao == 'VENCIDO' %}selected{% endif %}>Vencidos</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label text-secondary small fw-semibold">Fabricante</label>
+                <input type="text" name="fabricante" class="form-control form-control-premium" value="{{ filter_fabricante }}" placeholder="Nome do fabricante...">
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label text-secondary small fw-semibold">Validade De</label>
+                <input type="date" name="data_inicio" class="form-control form-control-premium" value="{{ filter_data_inicio }}">
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label text-secondary small fw-semibold">Validade Até</label>
+                <input type="date" name="data_fim" class="form-control form-control-premium" value="{{ filter_data_fim }}">
+            </div>
+            <div class="col-12 col-md-6 d-flex align-items-end justify-content-end gap-2">
+                <button type="submit" class="btn btn-premium btn-premium-primary px-4">
+                    <i class="bi bi-funnel-fill me-1"></i> Filtrar
+                </button>
+                <a href="{% url 'report_ca_validity' %}" class="btn btn-outline-secondary btn-premium px-3">
+                    <i class="bi bi-x-circle me-1"></i> Limpar Filtros
+                </a>
+            </div>
+        </div>
+    </form>
 </div>
 
 <div class="card-premium">
@@ -48,11 +94,26 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="5" class="text-center text-muted border-0 py-4">Nenhum Certificado de Aprovação (C.A.) cadastrado.</td>
+                    <td colspan="5" class="text-center text-muted border-0 py-4">Nenhum Certificado de Aprovação (C.A.) encontrado com os filtros aplicados.</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+
+    {% if is_paginated %}
+    <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top" style="border-color: var(--border-default) !important;">
+        <span class="text-muted small">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?{% url_replace page=page_obj.previous_page_number %}">&laquo; Anterior</a></li>
+            {% endif %}
+            <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+            {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?{% url_replace page=page_obj.next_page_number %}">Próxima &raquo;</a></li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

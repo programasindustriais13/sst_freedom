@@ -9,131 +9,129 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-12 col-xl-10">
+    <div class="col-12 col-xl-11">
         <div class="card-premium card-primary">
-            <h3 class="mb-4 text-primary"><i class="bi bi-shield-check"></i> {{ title }}</h3>
+            <h3 class="mb-4 text-primary"><i class="bi bi-shield-check me-2"></i> {{ title }}</h3>
             
-            <form method="post" enctype="multipart/form-data">
+            <form method="post" id="matrixForm">
                 {% csrf_token %}
                 
-                <div class="row g-4">
+                <div class="row g-4 mb-4">
                     <!-- Seleção da Função -->
-                    <div class="col-12">
-                        <label for="{{ form.funcao.id_for_label }}" class="form-label text-secondary fw-semibold">
-                            {{ form.funcao.label }}
-                        </label>
+                    <div class="col-12 col-md-8 col-lg-6">
+                        <label class="form-label text-secondary fw-semibold">Função / Cargo</label>
                         {% if is_create %}
-                            {{ form.funcao }}
-                            <div class="form-text text-muted">Selecione a função operacional que receberá as recomendações.</div>
+                            {% if funcao %}
+                                <div class="input-group">
+                                    <input type="text" class="form-control form-control-premium" value="{{ funcao.nome }}" readonly>
+                                    <input type="hidden" name="funcao" value="{{ funcao.id }}">
+                                    <a href="{% url 'matrix_bulk_create' %}" class="btn btn-outline-secondary btn-premium" title="Trocar função">Alterar</a>
+                                </div>
+                            {% else %}
+                                <select name="funcao" id="id_funcao_select" class="form-select form-control-premium" onchange="window.location.href='?funcao=' + this.value" required>
+                                    <option value="">-- Selecione uma Função --</option>
+                                    {% for choice in function_form.fields.funcao.queryset %}
+                                    <option value="{{ choice.id }}" {% if request.GET.funcao|stringformat:"s" == choice.id|stringformat:"s" %}selected{% endif %}>{{ choice.nome }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text text-muted">Selecione a função para carregar e parametrizar os EPIs recomendados.</div>
+                            {% endif %}
                         {% else %}
-                            <!-- Na edição, a função vem preenchida e bloqueada -->
                             <input type="text" class="form-control form-control-premium" value="{{ funcao.nome }}" disabled>
                             <input type="hidden" name="funcao" value="{{ funcao.id }}">
-                            <div class="form-text text-muted">A função não pode ser alterada durante a edição da matriz.</div>
-                        {% endif %}
-                        {% if form.funcao.errors %}
-                        <div class="invalid-feedback d-block">{{ form.funcao.errors|join:", " }}</div>
-                        {% endif %}
-                    </div>
-
-                    <!-- Configurações Padrão dos EPIs -->
-                    <div class="col-12">
-                        <div class="p-3 rounded border border-secondary" style="background: rgba(255,255,255,0.02); border-color: var(--border-default) !important;">
-                            <h5 class="text-light mb-3"><i class="bi bi-sliders"></i> Parâmetros Gerais para os Itens Selecionados</h5>
-                            <p class="text-secondary small">Esses parâmetros serão aplicados aos novos EPIs associados à matriz.</p>
-                            
-                            <div class="row g-3">
-                                <div class="col-12 col-md-6">
-                                    <label for="{{ form.quantidade_padrao.id_for_label }}" class="form-label text-secondary small fw-semibold">
-                                        {{ form.quantidade_padrao.label }}
-                                    </label>
-                                    {{ form.quantidade_padrao }}
-                                    {% if form.quantidade_padrao.errors %}
-                                    <div class="invalid-feedback d-block">{{ form.quantidade_padrao.errors|join:", " }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-12 col-md-6">
-                                    <label for="{{ form.vida_util_dias.id_for_label }}" class="form-label text-secondary small fw-semibold">
-                                        {{ form.vida_util_dias.label }}
-                                    </label>
-                                    {{ form.vida_util_dias }}
-                                    {% if form.vida_util_dias.errors %}
-                                    <div class="invalid-feedback d-block">{{ form.vida_util_dias.errors|join:", " }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-12 col-md-6">
-                                    <div class="form-check form-switch pt-2">
-                                        {{ form.obrigatorio }}
-                                        <label class="form-check-label text-secondary small fw-semibold" for="{{ form.obrigatorio.id_for_label }}">
-                                            {{ form.obrigatorio.label }}
-                                        </label>
-                                    </div>
-                                    {% if form.obrigatorio.errors %}
-                                    <div class="invalid-feedback d-block">{{ form.obrigatorio.errors|join:", " }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-12 col-md-6">
-                                    <div class="form-check form-switch pt-2">
-                                        {{ form.principal }}
-                                        <label class="form-check-label text-secondary small fw-semibold" for="{{ form.principal.id_for_label }}">
-                                            {{ form.principal.label }}
-                                        </label>
-                                    </div>
-                                    {% if form.principal.errors %}
-                                    <div class="invalid-feedback d-block">{{ form.principal.errors|join:", " }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="col-12">
-                                    <label for="{{ form.orientacoes.id_for_label }}" class="form-label text-secondary small fw-semibold">
-                                        {{ form.orientacoes.label }}
-                                    </label>
-                                    {{ form.orientacoes }}
-                                    {% if form.orientacoes.errors %}
-                                    <div class="invalid-feedback d-block">{{ form.orientacoes.errors|join:", " }}</div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Seleção dos EPIs (Checkbox Select Multiple com Grid Responsivo) -->
-                    <div class="col-12">
-                        <label class="form-label text-secondary fw-semibold d-block">
-                            {{ form.products.label }}
-                        </label>
-                        <p class="text-secondary small">Marque os EPIs que fazem parte da matriz da função. Itens desmarcados na edição serão desativados.</p>
-                        
-                        <div class="p-3 rounded border" style="background: rgba(255,255,255,0.01); border-color: var(--border-default) !important; max-height: 400px; overflow-y: auto;">
-                            <div class="row">
-                                {% for checkbox in form.products %}
-                                <div class="col-12 col-md-6 col-lg-4 mb-2">
-                                    <div class="form-check">
-                                        {{ checkbox.tag }}
-                                        <label class="form-check-label text-light fw-medium" for="{{ checkbox.id_for_label }}">
-                                            {{ checkbox.choice_label }}
-                                        </label>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        </div>
-                        {% if form.products.errors %}
-                        <div class="invalid-feedback d-block mt-2">{{ form.products.errors|join:", " }}</div>
                         {% endif %}
                     </div>
                 </div>
+
+                {% if funcao or formset %}
+                <div class="border-top pt-4" style="border-color: var(--border-default) !important;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="text-light mb-1"><i class="bi bi-list-check me-2 text-info"></i> Parametrização Individual dos EPIs</h5>
+                            <p class="text-secondary small mb-0">Configure a vida útil estimada, obrigatoriedade e relevância de cada EPI para esta função.</p>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-success btn-premium" id="add-row-btn">
+                            <i class="bi bi-plus-circle me-1"></i> Adicionar EPI
+                        </button>
+                    </div>
+
+                    {{ formset.management_form }}
+                    
+                    {% if formset.non_form_errors %}
+                    <div class="alert alert-danger alert-dismissible fade show my-3" role="alert">
+                        {% for error in formset.non_form_errors %}{{ error }}{% endfor %}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                    {% endif %}
+
+                    <div class="table-responsive">
+                        <table class="table table-premium align-middle mb-0" id="matrix-table">
+                            <thead>
+                                <tr>
+                                    <th style="min-width: 250px;" class="text-muted border-0">EPI</th>
+                                    <th style="width: 200px;" class="text-muted border-0">Vida Útil Estimada (dias)</th>
+                                    <th style="width: 130px;" class="text-muted border-0 text-center">Obrigatório</th>
+                                    <th style="width: 140px;" class="text-muted border-0 text-center">EPI Principal</th>
+                                    <th style="width: 90px;" class="text-muted border-0 text-center">Remover</th>
+                                </tr>
+                            </thead>
+                            <tbody id="formset-container">
+                                {% for form in formset.forms %}
+                                <tr class="formset-row">
+                                    {{ form.id }}
+                                    <td>
+                                        {{ form.product }}
+                                        {% if form.product.errors %}
+                                        <div class="invalid-feedback d-block text-danger small mt-1">
+                                            {% for error in form.product.errors %}{{ error }}{% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ form.vida_util_dias }}
+                                        {% if form.vida_util_dias.errors %}
+                                        <div class="invalid-feedback d-block text-danger small mt-1">
+                                            {% for error in form.vida_util_dias.errors %}{{ error }}{% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="form-check d-inline-block">
+                                            {{ form.obrigatorio }}
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="form-check d-inline-block">
+                                            {{ form.principal }}
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        {% if formset.can_delete %}
+                                            <div class="d-none">{{ form.DELETE }}</div>
+                                            <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn" title="Remover item">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
 
                 <!-- Ações -->
                 <div class="d-flex gap-2 mt-4 pt-3 border-top" style="border-color: var(--border-default) !important;">
                     <button type="submit" class="btn btn-premium btn-premium-primary px-4">
                         <i class="bi bi-check-lg me-2"></i> Salvar Matriz
                     </button>
-                    {% if is_create %}
-                    <a href="{% url 'matrix_list' %}" class="btn btn-outline-secondary btn-premium px-4">
+                    {% if funcao %}
+                    <a href="{% url 'function_detail' funcao.id %}" class="btn btn-outline-secondary btn-premium px-4">
                         Cancelar
                     </a>
                     {% else %}
-                    <a href="{% url 'function_detail' funcao.id %}" class="btn btn-outline-secondary btn-premium px-4">
+                    <a href="{% url 'matrix_list' %}" class="btn btn-outline-secondary btn-premium px-4">
                         Cancelar
                     </a>
                     {% endif %}
@@ -142,4 +140,73 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const addBtn = document.getElementById('add-row-btn');
+    const container = document.getElementById('formset-container');
+    const totalFormsInput = document.getElementById('id_ppe_matrix_entries-TOTAL_FORMS');
+
+    if (!container || !totalFormsInput) return;
+
+    // Configura botões de remoção existentes
+    function attachRemoveEvents() {
+        document.querySelectorAll('.remove-row-btn').forEach(btn => {
+            btn.onclick = function() {
+                const row = this.closest('tr');
+                const deleteInput = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+                if (deleteInput) {
+                    deleteInput.checked = true;
+                    row.style.display = 'none';
+                } else {
+                    row.remove();
+                }
+            };
+        });
+    }
+    attachRemoveEvents();
+
+    if (addBtn) {
+        addBtn.addEventListener('click', function() {
+            const formCount = parseInt(totalFormsInput.value);
+            const rows = container.querySelectorAll('.formset-row');
+            if (rows.length === 0) return;
+
+            // Clona a primeira linha
+            const templateRow = rows[0].cloneNode(true);
+            templateRow.style.display = '';
+
+            // Limpa erros e inputs
+            templateRow.querySelectorAll('.invalid-feedback').forEach(el => el.remove());
+            templateRow.querySelectorAll('input, select').forEach(input => {
+                const name = input.getAttribute('name');
+                if (name) {
+                    const newName = name.replace(/-\d+-/, `-${formCount}-`);
+                    input.setAttribute('name', newName);
+                    input.setAttribute('id', `id_${newName}`);
+                }
+                if (input.type === 'checkbox') {
+                    if (input.name.endsWith('-DELETE')) {
+                        input.checked = false;
+                    } else if (input.name.endsWith('-obrigatorio') || input.name.endsWith('-principal')) {
+                        input.checked = true;
+                    }
+                } else if (input.type === 'number') {
+                    input.value = '365';
+                } else if (input.tagName === 'SELECT') {
+                    input.selectedIndex = 0;
+                } else if (input.type === 'hidden') {
+                    input.value = '';
+                }
+            });
+
+            container.appendChild(templateRow);
+            totalFormsInput.value = formCount + 1;
+            attachRemoveEvents();
+        });
+    }
+});
+</script>
 {% endblock %}

@@ -8,17 +8,18 @@ def validate_cpf(value):
     # normaliza apenas digitos
     cpf = "".join(re.findall(r"\d", str(value)))
     if len(cpf) != 11:
-        raise ValidationError("CPF deve conter exatamente 11 dígitos numéricos.")
+        raise ValidationError("O CPF deve conter exatamente 11 dígitos.")
     
-    # validação de dígitos verificadores
+    # validação de dígitos repetidos
     if cpf == cpf[0] * 11:
-        raise ValidationError("CPF inválido.")
+        raise ValidationError("CPF inválido. Sequência de dígitos repetidos não é permitida.")
         
+    # validação de dígitos verificadores (módulo 11)
     for i in range(9, 11):
         value_sum = sum(int(cpf[num]) * ((i + 1) - num) for num in range(i))
         digit = ((value_sum * 10) % 11) % 10
         if digit != int(cpf[i]):
-            raise ValidationError("CPF inválido.")
+            raise ValidationError("CPF inválido. Os dígitos verificadores informados não conferem.")
 
 class Employee(models.Model):
     SITUACAO_CHOICES = (

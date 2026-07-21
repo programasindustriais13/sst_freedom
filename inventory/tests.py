@@ -371,3 +371,38 @@ class UnifiedFiscalNoteTestCase(TestCase):
         self.assertEqual(product.categoria, 'OUTRO')
         self.assertEqual(product.exige_ca, False)
 
+
+class FiscalNoteFilterTestCase(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser(username="admin_nfs", password="password123")
+        self.company = Company.objects.create(razao_social="Empresa NFs LTDA", cnpj="12345678000166")
+        self.unit = Unit.objects.create(company=self.company, codigo="U-NF", nome="Unidade NFs")
+        self.user.units.add(self.unit)
+        self.cost_center = CostCenter.objects.create(company=self.company, codigo="CC-NF", nome="Centro NF")
+        self.supplier = Supplier.objects.create(razao_social="Fornecedor Alpha", cnpj_cpf="11222333000144")
+
+        self.note1 = FiscalNote.objects.create(
+            supplier=self.supplier,
+            unit=self.unit,
+            centro_custo=self.cost_center,
+            numero="999001",
+            status="CONFERIDA",
+            valor_total=100.0,
+            usuario=self.user,
+            data_emissao=timezone.now().date(),
+            data_recebimento=timezone.now().date()
+        )
+
+    def test_fiscal_note_list_filter(self):
+        self.client.force_login(self.user)
+        from django.urls import reverse
+        url = reverse('fiscal_note_list')
+        response = self.client.get(url, {'numero': '999001'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['notes']), 1)
+
+        response2 = self.client.get(url, {'numero': '000000'})
+        self.assertEqual(response2.status_code, 200)
+        self.assertEqual(len(response2.context['notes']), 0)
+
+

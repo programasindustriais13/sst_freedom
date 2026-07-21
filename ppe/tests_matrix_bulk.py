@@ -52,25 +52,31 @@ class PPEMatrixBulkTestCase(TestCase):
         
         data = {
             'funcao': self.funcao.id,
-            'products': [self.product1.id, self.product2.id],
-            'quantidade_padrao': 1,
-            'vida_util_dias': 120,
-            'obrigatorio': True,
-            'principal': True,
-            'orientacoes': 'Instruções de teste.'
+            'ppe_matrix_entries-TOTAL_FORMS': '2',
+            'ppe_matrix_entries-INITIAL_FORMS': '0',
+            'ppe_matrix_entries-MIN_NUM_FORMS': '0',
+            'ppe_matrix_entries-MAX_NUM_FORMS': '1000',
+            'ppe_matrix_entries-0-product': self.product1.id,
+            'ppe_matrix_entries-0-vida_util_dias': 120,
+            'ppe_matrix_entries-0-obrigatorio': 'on',
+            'ppe_matrix_entries-0-principal': 'on',
+            'ppe_matrix_entries-1-product': self.product2.id,
+            'ppe_matrix_entries-1-vida_util_dias': 60,
+            'ppe_matrix_entries-1-obrigatorio': 'on',
+            'ppe_matrix_entries-1-principal': 'on',
         }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, 302) # Redirect to function_detail
 
         # 4. EPIs are associated correctly
-        self.assertTrue(PPEMatrix.objects.filter(funcao=self.funcao, product=self.product1, ativo=True).exists())
-        self.assertTrue(PPEMatrix.objects.filter(funcao=self.funcao, product=self.product2, ativo=True).exists())
+        self.assertTrue(PPEMatrix.objects.filter(funcao=self.funcao, product=self.product1, ativo=True, vida_util_dias=120).exists())
+        self.assertTrue(PPEMatrix.objects.filter(funcao=self.funcao, product=self.product2, ativo=True, vida_util_dias=60).exists())
 
     def test_unauthorized_user_cannot_create_matrix(self):
         # 14. URLs cannot bypass permissions
         self.client.login(username="almoxarife", password="pwd")
         url = reverse('matrix_bulk_create')
-        response = self.client.post(url, {'funcao': self.funcao.id, 'products': [self.product1.id]})
+        response = self.client.post(url, {'funcao': self.funcao.id})
         self.assertEqual(response.status_code, 403) # Forbidden for Almoxarife
 
     def test_edit_preserves_same_record_and_updates_correctly(self):
@@ -86,58 +92,75 @@ class PPEMatrixBulkTestCase(TestCase):
         self.client.login(username="tecnico", password="pwd")
         url = reverse('matrix_bulk_update', kwargs={'function_pk': self.funcao.id})
 
-        # 5. Edit keeps the same record, 6. updates associated EPIs
-        # We select product1 and product2 (adds product2, keeps product1)
+        # Edit keeps product1 and adds product2
         data = {
-            'funcao': self.funcao.id,
-            'products': [self.product1.id, self.product2.id],
-            'quantidade_padrao': 2,
-            'vida_util_dias': 180,
-            'obrigatorio': True,
-            'principal': True,
-            'orientacoes': 'Updated.'
+            'ppe_matrix_entries-TOTAL_FORMS': '2',
+            'ppe_matrix_entries-INITIAL_FORMS': '1',
+            'ppe_matrix_entries-MIN_NUM_FORMS': '0',
+            'ppe_matrix_entries-MAX_NUM_FORMS': '1000',
+            'ppe_matrix_entries-0-id': entry.id,
+            'ppe_matrix_entries-0-product': self.product1.id,
+            'ppe_matrix_entries-0-vida_util_dias': 180,
+            'ppe_matrix_entries-0-obrigatorio': 'on',
+            'ppe_matrix_entries-0-principal': 'on',
+            'ppe_matrix_entries-1-id': '',
+            'ppe_matrix_entries-1-product': self.product2.id,
+            'ppe_matrix_entries-1-vida_util_dias': 90,
+            'ppe_matrix_entries-1-obrigatorio': 'on',
+            'ppe_matrix_entries-1-principal': 'on',
         }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, 302)
 
         entry.refresh_from_db()
-        self.assertEqual(entry.id, entry.id)
+        self.assertEqual(entry.vida_util_dias, 180)
         self.assertTrue(entry.ativo)
 
         # product2 is added
-        self.assertTrue(PPEMatrix.objects.filter(funcao=self.funcao, product=self.product2, ativo=True).exists())
+        entry2 = PPEMatrix.objects.filter(funcao=self.funcao, product=self.product2, ativo=True).first()
+        self.assertIsNotNone(entry2)
+        self.assertEqual(entry2.vida_util_dias, 90)
 
-        # Now, let's edit again and deselect product1 (should make it inactive)
+        # Now edit again and delete product1
         data = {
-            'funcao': self.funcao.id,
-            'products': [self.product2.id],
-            'quantidade_padrao': 2,
-            'vida_util_dias': 180,
-            'obrigatorio': True,
-            'principal': True
+            'ppe_matrix_entries-TOTAL_FORMS': '2',
+            'ppe_matrix_entries-INITIAL_FORMS': '2',
+            'ppe_matrix_entries-MIN_NUM_FORMS': '0',
+            'ppe_matrix_entries-MAX_NUM_FORMS': '1000',
+            'ppe_matrix_entries-0-id': entry.id,
+            'ppe_matrix_entries-0-product': self.product1.id,
+            'ppe_matrix_entries-0-vida_util_dias': 180,
+            'ppe_matrix_entries-0-DELETE': 'on',
+            'ppe_matrix_entries-1-id': entry2.id,
+            'ppe_matrix_entries-1-product': self.product2.id,
+            'ppe_matrix_entries-1-vida_util_dias': 90,
+            'ppe_matrix_entries-1-obrigatorio': 'on',
+            'ppe_matrix_entries-1-principal': 'on',
         }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, 302)
 
-        # entry (product1) should now be INACTIVE
-        entry.refresh_from_db()
-        self.assertFalse(entry.ativo)
+        # product1 should now be removed/deleted
+        self.assertFalse(PPEMatrix.objects.filter(id=entry.id).exists())
 
     def test_validation_rules_respected(self):
-        # 7. Required fields validated
+        # Required fields and positive vida util validated
         self.client.login(username="tecnico", password="pwd")
         url = reverse('matrix_bulk_create')
         
-        # Missing products
+        # Zero or negative vida util
         data = {
             'funcao': self.funcao.id,
-            'products': [],
-            'quantidade_padrao': 1,
-            'vida_util_dias': 120,
+            'ppe_matrix_entries-TOTAL_FORMS': '1',
+            'ppe_matrix_entries-INITIAL_FORMS': '0',
+            'ppe_matrix_entries-MIN_NUM_FORMS': '0',
+            'ppe_matrix_entries-MAX_NUM_FORMS': '1000',
+            'ppe_matrix_entries-0-product': self.product1.id,
+            'ppe_matrix_entries-0-vida_util_dias': 0,
         }
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, 200) # Form returns error page
-        self.assertFalse(response.context['form'].is_valid())
+        self.assertFalse(response.context['formset'].is_valid())
 
     def test_matrix_delete_authorized(self):
         # Create initial matrix
@@ -151,7 +174,7 @@ class PPEMatrixBulkTestCase(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
-        # 9. Authorized delete works
+        # Authorized delete works
         response = self.client.post(url)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(PPEMatrix.objects.filter(funcao=self.funcao).count(), 0)
@@ -171,11 +194,14 @@ class PPEMatrixBulkTestCase(TestCase):
         self.client.login(username="tecnico", password="pwd")
         self.client.post(reverse('matrix_bulk_create'), {
             'funcao': self.funcao.id,
-            'products': [self.product1.id],
-            'quantidade_padrao': 1,
-            'vida_util_dias': 120,
-            'obrigatorio': True,
-            'principal': True
+            'ppe_matrix_entries-TOTAL_FORMS': '1',
+            'ppe_matrix_entries-INITIAL_FORMS': '0',
+            'ppe_matrix_entries-MIN_NUM_FORMS': '0',
+            'ppe_matrix_entries-MAX_NUM_FORMS': '1000',
+            'ppe_matrix_entries-0-product': self.product1.id,
+            'ppe_matrix_entries-0-vida_util_dias': 120,
+            'ppe_matrix_entries-0-obrigatorio': 'on',
+            'ppe_matrix_entries-0-principal': 'on',
         })
 
         admin_url = reverse('admin:ppe_ppematrix_changelist')

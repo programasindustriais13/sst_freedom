@@ -93,32 +93,82 @@ class ReportStockPositionView(LoginRequiredMixin, ListView):
     model = ProductVariant
     template_name = "reports/stock_position.html"
     context_object_name = "balances"
+    paginate_by = 20
+
+    def get_queryset(self):
+        return ProductVariant.objects.all().order_by('product__nome', 'tamanho')
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
         user = self.request.user
         user_units = user.units.all()
         if user.is_superuser and not user_units.exists():
             from organizations.models import Unit
             user_units = Unit.objects.all()
 
-        locations = InventoryLocation.objects.filter(unit__in=user_units, ativo=True)
-        variants = ProductVariant.objects.filter(ativo=True).select_related('product')
+        locations = InventoryLocation.objects.filter(unit__in=user_units, ativo=True).select_related('unit')
         
+        q = self.request.GET.get('q', '').strip().lower()
+        location_id = self.request.GET.get('location', '').strip()
+        unit_id = self.request.GET.get('unit', '').strip()
+        product_id = self.request.GET.get('product', '').strip()
+        situacao_saldo = self.request.GET.get('situacao_saldo', '').strip()
+
+        if location_id:
+            locations = locations.filter(id=location_id)
+        if unit_id:
+            locations = locations.filter(unit_id=unit_id)
+
+        variants = ProductVariant.objects.filter(ativo=True).select_related('product')
+        if product_id:
+            variants = variants.filter(product_id=product_id)
+
         stock_data = []
         for var in variants:
             for loc in locations:
                 bal = get_stock_balance(loc, var)
-                if bal > 0:
-                    stock_data.append({
-                        'product': var.product.nome,
-                        'tamanho': var.tamanho,
-                        'location': loc.nome,
-                        'unit': loc.unit.codigo,
-                        'saldo': bal,
-                        'minimo': var.estoque_minimo
-                    })
-        context['stock_data'] = stock_data
+                
+                if situacao_saldo == 'abaixo_minimo' and bal >= var.estoque_minimo:
+                    continue
+                elif situacao_saldo == 'com_saldo' and bal <= 0:
+                    continue
+                elif situacao_saldo == 'sem_saldo' and bal != 0:
+                    continue
+
+                if q:
+                    match_product = q in var.product.nome.lower()
+                    match_location = q in loc.nome.lower() or q in loc.unit.codigo.lower()
+                    if not (match_product or match_location):
+                        continue
+
+                stock_data.append({
+                    'product': var.product.nome,
+                    'tamanho': var.tamanho,
+                    'location': loc.nome,
+                    'unit': loc.unit.codigo,
+                    'saldo': bal,
+                    'minimo': var.estoque_minimo
+                })
+
+        from django.core.paginator import Paginator
+        paginator = Paginator(stock_data, self.paginate_by)
+        page_number = self.request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+
+        from ppe.models import Product
+        context = {
+            'view': self,
+            'page_obj': page_obj,
+            'stock_data': page_obj.object_list,
+            'is_paginated': page_obj.has_other_pages(),
+            'locations': InventoryLocation.objects.filter(unit__in=user_units, ativo=True),
+            'units': user_units,
+            'products': Product.objects.filter(ativo=True).order_by('nome'),
+            'filter_q': self.request.GET.get('q', '').strip(),
+            'filter_location': location_id,
+            'filter_unit': unit_id,
+            'filter_product': product_id,
+            'filter_situacao_saldo': situacao_saldo,
+        }
         return context
 
 
@@ -126,6 +176,7 @@ class ReportStockMovementsView(LoginRequiredMixin, ListView):
     model = StockMovement
     template_name = "reports/stock_movements.html"
     context_object_name = "movements"
+    paginate_by = 20
 
     def get_queryset(self):
         user = self.request.user
@@ -133,13 +184,73 @@ class ReportStockMovementsView(LoginRequiredMixin, ListView):
         if user.is_superuser and not user_units.exists():
             from organizations.models import Unit
             user_units = Unit.objects.all()
-        return StockMovement.objects.filter(unit__in=user_units).select_related('product_variant__product', 'location', 'lot', 'user')
+
+        queryset = StockMovement.objects.filter(unit__in=user_units).select_related(
+            'product_variant__product', 'location', 'lot', 'user', 'unit'
+        )
+
+        data_inicio = self.request.GET.get('data_inicio', '').strip()
+        if data_inicio:
+            queryset = queryset.filter(created_at__date__gte=data_inicio)
+
+        data_fim = self.request.GET.get('data_fim', '').strip()
+        if data_fim:
+            queryset = queryset.filter(created_at__date__lte=data_fim)
+
+        mov_type = self.request.GET.get('movement_type', '').strip()
+        if mov_type:
+            queryset = queryset.filter(movement_type=mov_type)
+
+        product_id = self.request.GET.get('product', '').strip()
+        if product_id:
+            queryset = queryset.filter(product_variant__product_id=product_id)
+
+        location_id = self.request.GET.get('location', '').strip()
+        if location_id:
+            queryset = queryset.filter(location_id=location_id)
+
+        unit_id = self.request.GET.get('unit', '').strip()
+        if unit_id:
+            queryset = queryset.filter(unit_id=unit_id)
+
+        doc = self.request.GET.get('documento', '').strip()
+        if doc:
+            queryset = queryset.filter(models.Q(reference_doc__icontains=doc) | models.Q(id__icontains=doc))
+
+        return queryset.order_by('-created_at')
+
+    def get_context_data(self, **kwargs):
+        if not hasattr(self, 'object_list'):
+            self.object_list = self.get_queryset()
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        user_units = user.units.all()
+        if user.is_superuser and not user_units.exists():
+            from organizations.models import Unit
+            user_units = Unit.objects.all()
+
+        from ppe.models import Product
+        context.update({
+            'movement_types': StockMovement.TYPE_CHOICES,
+            'products': Product.objects.filter(ativo=True).order_by('nome'),
+            'locations': InventoryLocation.objects.filter(unit__in=user_units, ativo=True),
+            'units': user_units,
+            'filter_data_inicio': self.request.GET.get('data_inicio', '').strip(),
+            'filter_data_fim': self.request.GET.get('data_fim', '').strip(),
+            'filter_movement_type': self.request.GET.get('movement_type', '').strip(),
+            'filter_product': self.request.GET.get('product', '').strip(),
+            'filter_location': self.request.GET.get('location', '').strip(),
+            'filter_unit': self.request.GET.get('unit', '').strip(),
+            'filter_documento': self.request.GET.get('documento', '').strip(),
+        })
+        return context
 
 
 class ReportPPEDeliveriesView(LoginRequiredMixin, ListView):
     model = PPEDelivery
     template_name = "reports/ppe_deliveries.html"
     context_object_name = "deliveries"
+    paginate_by = 20
 
     def get_queryset(self):
         user = self.request.user
@@ -147,12 +258,137 @@ class ReportPPEDeliveriesView(LoginRequiredMixin, ListView):
         if user.is_superuser and not user_units.exists():
             from organizations.models import Unit
             user_units = Unit.objects.all()
-        return PPEDelivery.objects.filter(unit__in=user_units).select_related('employee', 'product_variant__product', 'ca_entregue', 'lot', 'usuario_responsavel')
+
+        queryset = PPEDelivery.objects.filter(unit__in=user_units).select_related(
+            'employee', 'product_variant__product', 'ca_entregue', 'lot', 'usuario_responsavel', 'setor', 'funcao', 'unit'
+        )
+
+        data_inicio = self.request.GET.get('data_inicio', '').strip()
+        if data_inicio:
+            queryset = queryset.filter(data_entrega__gte=data_inicio)
+
+        data_fim = self.request.GET.get('data_fim', '').strip()
+        if data_fim:
+            queryset = queryset.filter(data_entrega__lte=data_fim)
+
+        q = self.request.GET.get('q', '').strip()
+        if q:
+            q_clean = "".join([c for c in q if c.isdigit()])
+            queryset = queryset.filter(
+                models.Q(employee__nome_completo__icontains=q) |
+                models.Q(employee__matricula__icontains=q) |
+                models.Q(employee__cpf__icontains=q_clean or q)
+            )
+
+        product_id = self.request.GET.get('product', '').strip()
+        if product_id:
+            queryset = queryset.filter(product_variant__product_id=product_id)
+
+        setor_id = self.request.GET.get('setor', '').strip()
+        if setor_id:
+            queryset = queryset.filter(setor_id=setor_id)
+
+        funcao_id = self.request.GET.get('funcao', '').strip()
+        if funcao_id:
+            queryset = queryset.filter(funcao_id=funcao_id)
+
+        unit_id = self.request.GET.get('unit', '').strip()
+        if unit_id:
+            queryset = queryset.filter(unit_id=unit_id)
+
+        status_ass = self.request.GET.get('status_assinatura', '').strip()
+        if status_ass:
+            queryset = queryset.filter(status_assinatura=status_ass)
+
+        return queryset.order_by('-data_entrega')
+
+    def get_context_data(self, **kwargs):
+        if not hasattr(self, 'object_list'):
+            self.object_list = self.get_queryset()
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        user_units = user.units.all()
+        if user.is_superuser and not user_units.exists():
+            from organizations.models import Unit
+            user_units = Unit.objects.all()
+
+        from ppe.models import Product
+        from organizations.models import Sector, Function
+        context.update({
+            'products': Product.objects.filter(ativo=True).order_by('nome'),
+            'sectors': Sector.objects.filter(unit__in=user_units).order_by('nome'),
+            'functions': Function.objects.filter(ativo=True).order_by('nome'),
+            'units': user_units,
+            'status_choices': PPEDelivery.SIGN_STATUS,
+            'filter_data_inicio': self.request.GET.get('data_inicio', '').strip(),
+            'filter_data_fim': self.request.GET.get('data_fim', '').strip(),
+            'filter_q': self.request.GET.get('q', '').strip(),
+            'filter_product': self.request.GET.get('product', '').strip(),
+            'filter_setor': self.request.GET.get('setor', '').strip(),
+            'filter_funcao': self.request.GET.get('funcao', '').strip(),
+            'filter_unit': self.request.GET.get('unit', '').strip(),
+            'filter_status_assinatura': self.request.GET.get('status_assinatura', '').strip(),
+        })
+        return context
 
 
 class ReportCAValidityView(LoginRequiredMixin, ListView):
     model = CertificadoAprovacao
     template_name = "reports/ca_validity.html"
     context_object_name = "cas"
-    queryset = CertificadoAprovacao.objects.all().order_by('data_validade')
+    paginate_by = 20
+
+    def get_queryset(self):
+        queryset = CertificadoAprovacao.objects.all()
+
+        ca_num = self.request.GET.get('numero', '').strip()
+        if ca_num:
+            ca_clean = "".join([c for c in ca_num if c.isdigit()])
+            queryset = queryset.filter(models.Q(numero__icontains=ca_clean) | models.Q(numero_exibicao__icontains=ca_num))
+
+        q = self.request.GET.get('q', '').strip()
+        if q:
+            queryset = queryset.filter(
+                models.Q(equipamento__icontains=q) |
+                models.Q(fabricante__icontains=q) |
+                models.Q(aprovado_para__icontains=q)
+            )
+
+        fabricante = self.request.GET.get('fabricante', '').strip()
+        if fabricante:
+            queryset = queryset.filter(fabricante__icontains=fabricante)
+
+        situacao = self.request.GET.get('situacao', '').strip()
+        today = timezone.now().date()
+        if situacao == 'VENCIDO':
+            queryset = queryset.filter(data_validade__lt=today)
+        elif situacao == 'PROXIMO':
+            limit = today + timezone.timedelta(days=60)
+            queryset = queryset.filter(data_validade__gte=today, data_validade__lte=limit)
+        elif situacao == 'VALIDO':
+            queryset = queryset.filter(data_validade__gte=today)
+
+        data_inicio = self.request.GET.get('data_inicio', '').strip()
+        if data_inicio:
+            queryset = queryset.filter(data_validade__gte=data_inicio)
+
+        data_fim = self.request.GET.get('data_fim', '').strip()
+        if data_fim:
+            queryset = queryset.filter(data_validade__lte=data_fim)
+
+        return queryset.order_by('data_validade')
+
+    def get_context_data(self, **kwargs):
+        if not hasattr(self, 'object_list'):
+            self.object_list = self.get_queryset()
+        context = super().get_context_data(**kwargs)
+        context.update({
+            'filter_numero': self.request.GET.get('numero', '').strip(),
+            'filter_q': self.request.GET.get('q', '').strip(),
+            'filter_fabricante': self.request.GET.get('fabricante', '').strip(),
+            'filter_situacao': self.request.GET.get('situacao', '').strip(),
+            'filter_data_inicio': self.request.GET.get('data_inicio', '').strip(),
+            'filter_data_fim': self.request.GET.get('data_fim', '').strip(),
+        })
+        return context
 

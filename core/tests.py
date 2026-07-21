@@ -395,3 +395,38 @@ class SecuritySettingsTestCase(SimpleTestCase):
         self.assertIsInstance(settings.CSRF_COOKIE_SECURE, bool)
         self.assertIsInstance(settings.SECURE_SSL_REDIRECT, bool)
 
+
+class ReportFiltersTestCase(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_superuser(username="admin_reports", email="admin_reports@example.com", password="password123")
+        self.company = Company.objects.create(razao_social="Empresa Relatorios LTDA", cnpj="12345678000188")
+        self.unit = Unit.objects.create(company=self.company, codigo="U-REP", nome="Unidade Relatorios")
+        self.user.units.add(self.unit)
+
+    def test_stock_position_report_filter(self):
+        self.client.force_login(self.user)
+        url = reverse("report_stock_position")
+        response = self.client.get(url, {'q': 'inexistente'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['stock_data']), 0)
+
+    def test_stock_movements_report_filter(self):
+        self.client.force_login(self.user)
+        url = reverse("report_stock_movements")
+        response = self.client.get(url, {'movement_type': 'ENTRADA_NOTA_FISCAL'})
+        self.assertEqual(response.status_code, 200)
+
+    def test_ppe_deliveries_report_filter(self):
+        self.client.force_login(self.user)
+        url = reverse("report_ppe_deliveries")
+        response = self.client.get(url, {'status_assinatura': 'PENDENTE'})
+        self.assertEqual(response.status_code, 200)
+
+    def test_ca_validity_report_filter(self):
+        self.client.force_login(self.user)
+        url = reverse("report_ca_validity")
+        response = self.client.get(url, {'situacao': 'VALIDO'})
+        self.assertEqual(response.status_code, 200)
+
+

@@ -25,8 +25,13 @@
                     </div>
                     <div class="col-12 col-md-3">
                         <label for="id_cpf" class="form-label text-secondary fw-semibold">CPF</label>
-                        <input type="text" name="cpf" id="id_cpf" class="form-control form-control-premium" value="{{ form.cpf.value|default:'' }}" required placeholder="Apenas números">
-                        {{ form.cpf.errors }}
+                        <input type="text" name="cpf" id="id_cpf" class="form-control form-control-premium {% if form.cpf.errors %}is-invalid border-danger{% endif %}" value="{{ form.cpf.value|default:'' }}" required placeholder="000.000.000-00" maxlength="14" autocomplete="off">
+                        {% if form.cpf.errors %}
+                        <div class="invalid-feedback d-block fw-semibold text-danger mt-1">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                            {% for error in form.cpf.errors %}{{ error }}{% endfor %}
+                        </div>
+                        {% endif %}
                     </div>
                     <div class="col-12 col-md-3">
                         <label for="id_matricula" class="form-label text-secondary fw-semibold">Matrícula</label>
@@ -171,4 +176,45 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const cpfInput = document.getElementById('id_cpf');
+    if (!cpfInput) return;
+
+    function formatCPF(value) {
+        let v = String(value || '').replace(/\D/g, '').slice(0, 11);
+        if (v.length > 9) {
+            return v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
+        } else if (v.length > 6) {
+            return v.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
+        } else if (v.length > 3) {
+            return v.replace(/(\d{3})(\d{1,3})/, '$1.$2');
+        }
+        return v;
+    }
+
+    if (cpfInput.value) {
+        cpfInput.value = formatCPF(cpfInput.value);
+    }
+
+    cpfInput.addEventListener('input', function(e) {
+        const cursorStart = this.selectionStart;
+        const oldLength = this.value.length;
+        this.value = formatCPF(this.value);
+        const newLength = this.value.length;
+        let newCursor = cursorStart + (newLength - oldLength);
+        if (newCursor < 0) newCursor = 0;
+        this.setSelectionRange(newCursor, newCursor);
+    });
+
+    cpfInput.addEventListener('paste', function(e) {
+        setTimeout(() => {
+            this.value = formatCPF(this.value);
+        }, 10);
+    });
+});
+</script>
 {% endblock %}
