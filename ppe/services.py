@@ -15,12 +15,18 @@ def deliver_ppe(employee, product_variant, lot, quantity, user, data_entrega, na
     Debita o estoque no local SST da unidade do colaborador.
     Calcula a próxima troca preventiva com base na matriz ou exceções extraordinárias.
     """
-    # 1. Localiza o estoque SST da unidade
+    # 1. Valida se a variante pertence ao lote informado
+    if lot:
+        if product_variant and lot.product_variant != product_variant:
+            raise ValidationError("O lote selecionado não pertence ao EPI ou tamanho informado.")
+        product_variant = lot.product_variant
+
+    # 2. Localiza o estoque SST da unidade
     loc_sst = InventoryLocation.objects.filter(unit=employee.unit, tipo='SST', ativo=True).first()
     if not loc_sst:
         raise ValidationError(f"A unidade {employee.unit.nome} não possui um Local de Estoque SST cadastrado e ativo.")
 
-    # 2. Valida o saldo disponível
+    # 3. Valida o saldo disponível
     current_bal = get_stock_balance(loc_sst, product_variant, lot)
     if current_bal < quantity:
         raise InsufficientStockError(f"Saldo insuficiente no estoque SST para o Lote {lot.identificador}. Disponível: {current_bal}, Solicitado: {quantity}")

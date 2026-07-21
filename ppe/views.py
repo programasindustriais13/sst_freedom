@@ -16,7 +16,7 @@ from inventory.services import get_stock_balance
 from employees.models import Employee
 from .models import Product, ProductVariant, CertificadoAprovacao, PPEMatrix, PPEDelivery, ExtraordinaryPPE
 from .services import deliver_ppe, confirm_delivery_signature, return_ppe, write_off_ppe
-from .forms import ProductForm, PPEMatrixForm, PPEMatrixBulkForm, PPEMatrixFormSet, PPEMatrixFunctionForm
+from .forms import ProductForm, PPEMatrixForm, PPEMatrixBulkForm, PPEMatrixFormSet, PPEMatrixFunctionForm, PPEDeliveryForm
 
 class ProductListView(LoginRequiredMixin, ListView):
     model = Product
@@ -337,7 +337,7 @@ class PPEDeliveryListView(LoginRequiredMixin, ListView):
 
 class PPEDeliveryCreateView(LoginRequiredMixin, CreateView):
     model = PPEDelivery
-    fields = ['employee', 'product_variant', 'lot', 'quantidade', 'data_entrega', 'natureza_entrega', 'motivo_substituicao']
+    form_class = PPEDeliveryForm
     template_name = "ppe/delivery_form.html"
 
     def get_initial(self):
@@ -352,24 +352,36 @@ class PPEDeliveryCreateView(LoginRequiredMixin, CreateView):
         user_units = user.units.all()
         if user.is_superuser and not user_units.exists():
             user_units = Unit.objects.all()
-            
+
         # Filtra colaboradores da unidade permitida
         form.fields['employee'].queryset = Employee.objects.filter(unit__in=user_units, situacao='ATIVO')
-        # Filtra variantes de EPI ativas
-        form.fields['product_variant'].queryset = ProductVariant.objects.filter(ativo=True).select_related('product')
-        
+
         # Filtra lotes disponíveis no estoque SST das unidades permitidas
         sst_locations = InventoryLocation.objects.filter(unit__in=user_units, tipo='SST', ativo=True)
-        available_lots = []
-        lots = Lot.objects.all().select_related('product_variant__product')
-        for lot in lots:
-            # Check balance in any SST location
+        lots_qs = Lot.objects.select_related('product_variant__product').order_by(
+            'data_validade',
+            'product_variant__product__nome',
+            'identificador'
+        )
+
+        lot_choices = [('', 'Selecione o EPI disponível no estoque SST...')]
+        available_lot_ids = []
+
+        for lot in lots_qs:
+            total_bal = 0
             for loc in sst_locations:
-                bal = get_stock_balance(loc, lot.product_variant, lot)
-                if bal > 0:
-                    available_lots.append(lot.id)
-                    break
-        form.fields['lot'].queryset = Lot.objects.filter(id__in=available_lots).select_related('product_variant__product')
+                total_bal += get_stock_balance(loc, lot.product_variant, lot)
+            
+            if total_bal > 0:
+                available_lot_ids.append(lot.id)
+                prod_nome = lot.product_variant.product.nome
+                tam = lot.product_variant.tamanho
+                val_str = lot.data_validade.strftime('%d/%m/%Y') if lot.data_validade else 'Sem validade'
+                label = f"{prod_nome} — Tamanho {tam} — Lote {lot.identificador} — Validade {val_str} — Saldo: {total_bal}"
+                lot_choices.append((lot.id, label))
+
+        form.fields['lot'].queryset = Lot.objects.filter(id__in=available_lot_ids)
+        form.fields['lot'].choices = lot_choices
 
         # Pré-seleção segura do colaborador via query param ?employee=<id>
         emp_param = self.request.GET.get('employee', '').strip()

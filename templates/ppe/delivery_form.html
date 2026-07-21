@@ -28,23 +28,13 @@
                         {{ form.employee.errors }}
                     </div>
 
-                    <div class="col-12 col-md-6">
-                        <label for="id_product_variant" class="form-label text-secondary fw-semibold">EPI / Variante de Tamanho</label>
-                        <select name="product_variant" id="id_product_variant" class="form-select form-control-premium" required>
-                            <option value="">Selecione o EPI...</option>
-                            {% for variant in form.product_variant.field.queryset %}
-                            <option value="{{ variant.id }}" {% if form.product_variant.value|stringformat:"s" == variant.id|stringformat:"s" %}selected{% endif %}>{{ variant.product.nome }} (Tamanho: {{ variant.tamanho }})</option>
-                            {% endfor %}
-                        </select>
-                        {{ form.product_variant.errors }}
-                    </div>
+                    {{ form.product_variant }}
 
                     <div class="col-12 col-md-8">
-                        <label for="id_lot" class="form-label text-secondary fw-semibold">Lote de Origem (Saldo SST disponível)</label>
+                        <label for="id_lot" class="form-label text-secondary fw-semibold">EPI disponível no estoque SST</label>
                         <select name="lot" id="id_lot" class="form-select form-control-premium" required>
-                            <option value="">Selecione o Lote com saldo no SST...</option>
-                            {% for lot in form.lot.field.queryset %}
-                            <option value="{{ lot.id }}" {% if form.lot.value|stringformat:"s" == lot.id|stringformat:"s" %}selected{% endif %}>{{ lot.product_variant.product.nome }} - Lote {{ lot.identificador }} (Tamanho: {{ lot.product_variant.tamanho }}) [Val: {{ lot.data_validade|date:"d/m/Y" }}]</option>
+                            {% for val, label in form.fields.lot.choices %}
+                            <option value="{{ val }}" {% if form.lot.value|stringformat:"s" == val|stringformat:"s" %}selected{% endif %}>{{ label }}</option>
                             {% endfor %}
                         </select>
                         {{ form.lot.errors }}

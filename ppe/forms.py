@@ -1,5 +1,5 @@
 from django import forms
-from .models import Product, PPEMatrix, ProductVariant
+from .models import Product, PPEMatrix, ProductVariant, PPEDelivery
 from organizations.models import Function
 
 class ProductForm(forms.ModelForm):
@@ -221,5 +221,67 @@ class PPEMatrixBulkForm(forms.Form):
         if self.is_update:
             self.fields['funcao'].disabled = True
             self.fields['funcao'].required = False
+
+
+class PPEDeliveryForm(forms.ModelForm):
+    class Meta:
+        model = PPEDelivery
+        fields = ['employee', 'lot', 'quantidade', 'data_entrega', 'natureza_entrega', 'motivo_substituicao', 'product_variant']
+        widgets = {
+            'employee': forms.Select(attrs={'class': 'form-select form-control-premium'}),
+            'lot': forms.Select(attrs={'class': 'form-select form-control-premium'}),
+            'quantidade': forms.NumberInput(attrs={'class': 'form-control form-control-premium', 'min': '1'}),
+            'data_entrega': forms.DateInput(attrs={'class': 'form-control form-control-premium', 'type': 'date'}),
+            'natureza_entrega': forms.Select(attrs={'class': 'form-select form-control-premium'}),
+            'motivo_substituicao': forms.Textarea(attrs={'class': 'form-control form-control-premium', 'rows': 3}),
+            'product_variant': forms.HiddenInput(),
+        }
+        labels = {
+            'employee': 'Colaborador / Beneficiário',
+            'lot': 'EPI disponível no estoque SST',
+            'quantidade': 'Quantidade Entregue',
+            'data_entrega': 'Data da Entrega',
+            'natureza_entrega': 'Natureza da Entrega',
+            'motivo_substituicao': 'Justificativa / Motivo de Substituição / Observações',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['product_variant'].required = False
+
+    def clean(self):
+        cleaned_data = super().clean()
+        lot = cleaned_data.get('lot')
+        pv_provided = cleaned_data.get('product_variant')
+        quantidade = cleaned_data.get('quantidade')
+
+        if not lot:
+            self.add_error('lot', "Selecione um EPI disponível no estoque SST.")
+            return cleaned_data
+
+        # Determina/vincula a variante automaticamente a partir do lote
+        expected_variant = lot.product_variant
+        if pv_provided and pv_provided != expected_variant:
+            self.add_error('lot', "O lote selecionado não pertence ao EPI ou tamanho informado.")
+            return cleaned_data
+
+        cleaned_data['product_variant'] = expected_variant
+
+        # Validação de saldo no backend
+        from inventory.services import get_stock_balance
+        from organizations.models import InventoryLocation
+        
+        employee = cleaned_data.get('employee')
+        if employee and quantidade:
+            loc_sst = InventoryLocation.objects.filter(unit=employee.unit, tipo='SST', ativo=True).first()
+            if loc_sst:
+                bal = get_stock_balance(loc_sst, expected_variant, lot)
+                if bal <= 0:
+                    self.add_error('lot', "O lote selecionado não possui saldo disponível no estoque SST.")
+                elif quantidade > bal:
+                    self.add_error('quantidade', f"A quantidade informada ({quantidade}) é maior que o saldo disponível neste lote ({bal}).")
+
+        return cleaned_data
+
 
 
