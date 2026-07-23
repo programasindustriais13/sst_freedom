@@ -193,7 +193,7 @@
 
                     <div class="col-md-12 mb-3">
                         <label for="id_tamanhos_str" class="form-label text-secondary fw-semibold">Tamanhos / Variantes Disponíveis (separados por vírgula)</label>
-                        <input type="text" name="tamanhos_str" id="id_tamanhos_str" class="form-control form-control-premium" placeholder="Ex: P, M, G, GG ou 38, 39, 40 ou Único (deixe em branco para Único 'U')">
+                        <input type="text" name="tamanhos_str" id="id_tamanhos_str" class="form-control form-control-premium" value="{{ form.tamanhos_str.value|default:'' }}" placeholder="Ex: P, M, G, GG ou 38, 39, 40 ou Único (deixe em branco para Único 'U')">
                         <small class="text-muted d-block mt-1">Os tamanhos digitados serão cadastrados automaticamente como variantes deste produto.</small>
                     </div>
 

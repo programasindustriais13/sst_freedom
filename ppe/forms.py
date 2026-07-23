@@ -3,6 +3,15 @@ from .models import Product, PPEMatrix, ProductVariant, PPEDelivery
 from organizations.models import Function
 
 class ProductForm(forms.ModelForm):
+    tamanhos_str = forms.CharField(
+        required=False,
+        label="Tamanhos / Variantes Disponíveis (separados por vírgula)",
+        widget=forms.TextInput(attrs={
+            'class': 'form-control form-control-premium',
+            'placeholder': 'Ex: P, M, G, GG ou 38, 39, 40 ou Único (deixe em branco para Único \'U\')'
+        })
+    )
+
     class Meta:
         model = Product
         fields = [
@@ -24,6 +33,19 @@ class ProductForm(forms.ModelForm):
                 # Normaliza o número do CA (apenas dígitos)
                 num_norm = "".join([c for c in str(ca_numero) if c.isdigit()])
                 cleaned_data['ca_numero'] = num_norm
+                
+                # Validação de duplicidade de CA no nível de aplicação (SPEC 1 - Objetivo 5)
+                if num_norm:
+                    dup_qs = Product.objects.filter(tipo_produto='EPI', ca_numero=num_norm)
+                    if self.instance and self.instance.pk:
+                        dup_qs = dup_qs.exclude(pk=self.instance.pk)
+                    
+                    existing_epi = dup_qs.first()
+                    if existing_epi:
+                        self.add_error(
+                            'ca_numero',
+                            f"Já existe um EPI cadastrado com o CA {num_norm}. Abra o cadastro existente para adicionar ou editar os tamanhos disponíveis."
+                        )
                 
                 # Tenta obter ou consultar do ConsultaCA no backend para persistir snapshot
                 try:
@@ -53,6 +75,7 @@ class ProductForm(forms.ModelForm):
             cleaned_data['exige_ca'] = False
         
         return cleaned_data
+
 
 
 class PPEMatrixForm(forms.ModelForm):

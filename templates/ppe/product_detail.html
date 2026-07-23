@@ -118,29 +118,6 @@
             </div>
         </div>
         {% endif %}
-        
-        <!-- Adicionar Variante (Tamanho) -->
-        <div class="card-premium">
-            <h4 class="mb-3 text-success">Adicionar Tamanho/Grade</h4>
-            <form method="post" action="{% url 'variant_create' product.id %}">
-                {% csrf_token %}
-                <div class="mb-3">
-                    <label for="id_tamanho" class="form-label text-secondary fw-semibold">Tamanho / Numeração</label>
-                    <input type="text" name="tamanho" id="id_tamanho" class="form-control form-control-premium" required placeholder="P, M, G, 38, 39...">
-                </div>
-                <div class="mb-3">
-                    <label for="id_sku" class="form-label text-secondary fw-semibold">SKU / Cód Interno</label>
-                    <input type="text" name="sku" id="id_sku" class="form-control form-control-premium">
-                </div>
-                <div class="mb-3">
-                    <label for="id_estoque_minimo" class="form-label text-secondary fw-semibold">Estoque Mínimo</label>
-                    <input type="number" name="estoque_minimo" id="id_estoque_minimo" class="form-control form-control-premium" value="0">
-                </div>
-                <button type="submit" class="btn btn-premium btn-premium-primary w-100">
-                    Adicionar Tamanho
-                </button>
-            </form>
-        </div>
     </div>
 
     <!-- Grade de Variantes e Estoque Físico -->

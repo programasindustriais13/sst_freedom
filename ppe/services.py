@@ -232,3 +232,132 @@ def write_off_ppe(unit, location, product_variant, lot, quantity, reason, user, 
         user=user,
         notes=notes
     )
+
+
+def normalize_size_string(tamanhos_str):
+    """
+    Normaliza a string de tamanhos/variantes separada por vírgula.
+    Remove espaços extras, ignora itens vazios e elimina duplicidades de forma insensível a maiúsculas/minúsculas,
+    preservando a primeira representação visual.
+    Exemplo: "P, M, G, m, GG, , P" -> ["P", "M", "G", "GG"]
+    """
+    if not tamanhos_str:
+        return []
+    items = [t.strip() for t in str(tamanhos_str).split(',') if t.strip()]
+    seen_lower = set()
+    result = []
+    for item in items:
+        key = item.lower()
+        if key not in seen_lower:
+            seen_lower.add(key)
+            result.append(item)
+    return result
+
+
+def variant_has_history_or_stock(variant):
+    """
+    Verifica se uma variante de EPI possui saldo em estoque, lotes ou histórico de movimentações,
+    entregas, devoluções, transferências, matrizes ou autorizações extraordinárias.
+    """
+    from inventory.models import StockMovement, Lot, StockTransferItem, LocationStockMinimo
+    from ppe.models import PPEDelivery, PPEMatrix, ExtraordinaryPPE
+    from inventory.services import get_stock_balance
+    from organizations.models import InventoryLocation
+
+    # Check lotes
+    if Lot.objects.filter(product_variant=variant).exists():
+        return True
+
+    # Check movimentações
+    if StockMovement.objects.filter(product_variant=variant).exists():
+        return True
+
+    # Check entregas
+    if PPEDelivery.objects.filter(product_variant=variant).exists():
+        return True
+
+    # Check itens de transferência
+    if StockTransferItem.objects.filter(product_variant=variant).exists():
+        return True
+
+    # Check mínimos por local
+    if LocationStockMinimo.objects.filter(product_variant=variant).exists():
+        return True
+
+    # Check matrizes por função
+    if PPEMatrix.objects.filter(variant=variant).exists():
+        return True
+
+    # Check autorizações extraordinárias
+    if ExtraordinaryPPE.objects.filter(variant=variant).exists():
+        return True
+
+    # Check saldo em qualquer local de estoque
+    for loc in InventoryLocation.objects.filter(ativo=True):
+        if get_stock_balance(loc, variant) > 0:
+            return True
+
+    return False
+
+
+def sync_product_variants(product, tamanhos_str):
+    """
+    Normaliza e sincroniza as variantes de um EPI a partir da string enviada no formulário.
+    - Reutiliza variantes existentes.
+    - Cria variantes verdadeiramente novas.
+    - Preserva SKU, estoque mínimo e demais atributos de variantes existentes.
+    - Impede desativação/exclusão de variantes que possuem saldo ou histórico, retornando avisos.
+    - Desativa (ativo=False) variantes sem histórico que deixarem de ser informadas.
+    """
+    from ppe.models import ProductVariant
+
+    tamanhos_list = normalize_size_string(tamanhos_str)
+    if not tamanhos_list and not product.variants.filter(ativo=True).exists():
+        tamanhos_list = ['U']
+
+    existing_variants = list(product.variants.all())
+    existing_by_lower = {v.tamanho.lower(): v for v in existing_variants}
+
+    updated_variants = []
+    warning_messages = []
+
+    requested_sizes_lower = {t.lower(): t for t in tamanhos_list}
+
+    # 1. Processa tamanhos solicitados: reutiliza ou cria
+    for size in tamanhos_list:
+        size_lower = size.lower()
+        if size_lower in existing_by_lower:
+            variant = existing_by_lower[size_lower]
+            if not variant.ativo:
+                variant.ativo = True
+                variant.save(update_fields=['ativo'])
+            updated_variants.append(variant)
+        else:
+            variant = ProductVariant.objects.create(
+                product=product,
+                tamanho=size,
+                ativo=True,
+                estoque_minimo=0
+            )
+            updated_variants.append(variant)
+
+    # 2. Verifica variantes existentes ausentes na solicitação
+    for variant in existing_variants:
+        if variant.tamanho.lower() not in requested_sizes_lower:
+            if variant_has_history_or_stock(variant):
+                # Mantém ativa e gera aviso
+                if not variant.ativo:
+                    variant.ativo = True
+                    variant.save(update_fields=['ativo'])
+                warning_messages.append(
+                    f"A variante {variant.tamanho} não pode ser removida porque possui estoque ou histórico de movimentações."
+                )
+                updated_variants.append(variant)
+            else:
+                # Inativa com segurança se sem histórico
+                if variant.ativo:
+                    variant.ativo = False
+                    variant.save(update_fields=['ativo'])
+
+    return updated_variants, warning_messages
+

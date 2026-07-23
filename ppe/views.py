@@ -15,7 +15,7 @@ from inventory.models import Lot, StockMovement
 from inventory.services import get_stock_balance
 from employees.models import Employee
 from .models import Product, ProductVariant, CertificadoAprovacao, PPEMatrix, PPEDelivery, ExtraordinaryPPE
-from .services import deliver_ppe, confirm_delivery_signature, return_ppe, write_off_ppe
+from .services import deliver_ppe, confirm_delivery_signature, return_ppe, write_off_ppe, sync_product_variants
 from .forms import ProductForm, PPEMatrixForm, PPEMatrixBulkForm, PPEMatrixFormSet, PPEMatrixFunctionForm, PPEDeliveryForm
 
 class ProductListView(LoginRequiredMixin, ListView):
@@ -93,17 +93,13 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        tamanhos_str = self.request.POST.get('tamanhos_str', '').strip()
-        tamanhos_list = [t.strip() for t in tamanhos_str.split(',') if t.strip()] if tamanhos_str else []
-        if not tamanhos_list and not self.object.variants.exists():
-            tamanhos_list = ['U']
-
-        for tam in tamanhos_list:
-            ProductVariant.objects.get_or_create(
-                product=self.object,
-                tamanho=tam,
-                defaults={'ativo': True, 'estoque_minimo': 0}
-            )
+        tamanhos_str = form.cleaned_data.get('tamanhos_str')
+        if tamanhos_str is None:
+            tamanhos_str = self.request.POST.get('tamanhos_str', '').strip()
+            
+        _, warnings = sync_product_variants(self.object, tamanhos_str)
+        for msg in warnings:
+            messages.warning(self.request, msg)
         return response
 
 
@@ -113,10 +109,23 @@ class ProductUpdateView(LoginRequiredMixin, UpdateView):
     template_name = "ppe/product_form.html"
     success_url = "/ppe/"
 
+    def get_initial(self):
+        initial = super().get_initial()
+        if hasattr(self, 'object') and self.object:
+            active_vars = self.object.variants.filter(ativo=True).order_by('id')
+            if active_vars.exists():
+                initial['tamanhos_str'] = ", ".join([v.tamanho for v in active_vars])
+        return initial
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['title'] = f"Editar Produto: {self.object.nome}"
         
+        if 'form' in context and hasattr(self, 'object') and self.object and not context['form'].is_bound:
+            active_vars = self.object.variants.filter(ativo=True).order_by('id')
+            if active_vars.exists():
+                context['form'].fields['tamanhos_str'].initial = ", ".join([v.tamanho for v in active_vars])
+
         ca_numero = None
         if self.request.method == 'POST':
             ca_numero = self.request.POST.get('ca_numero')
@@ -131,15 +140,13 @@ class ProductUpdateView(LoginRequiredMixin, UpdateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        tamanhos_str = self.request.POST.get('tamanhos_str', '').strip()
-        if tamanhos_str:
-            tamanhos_list = [t.strip() for t in tamanhos_str.split(',') if t.strip()]
-            for tam in tamanhos_list:
-                ProductVariant.objects.get_or_create(
-                    product=self.object,
-                    tamanho=tam,
-                    defaults={'ativo': True, 'estoque_minimo': 0}
-                )
+        tamanhos_str = form.cleaned_data.get('tamanhos_str')
+        if tamanhos_str is None:
+            tamanhos_str = self.request.POST.get('tamanhos_str', '').strip()
+            
+        _, warnings = sync_product_variants(self.object, tamanhos_str)
+        for msg in warnings:
+            messages.warning(self.request, msg)
         return response
 
 
@@ -186,30 +193,16 @@ class ProductDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class ProductVariantCreateView(LoginRequiredMixin, CreateView):
-    model = ProductVariant
-    fields = ['tamanho', 'sku', 'codigo_barras', 'estoque_minimo', 'estoque_maximo', 'ativo']
+class ProductVariantCreateView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        product_id = self.kwargs.get('product_pk')
+        messages.info(request, "O gerenciamento de tamanhos e variantes é realizado exclusivamente na tela de edição do EPI.")
+        return redirect('product_update', pk=product_id)
 
     def post(self, request, *args, **kwargs):
         product_id = self.kwargs.get('product_pk')
-        product = get_object_or_404(Product, pk=product_id)
-        form = self.get_form()
-        if form.is_valid():
-            variant = form.save(commit=False)
-            variant.product = product
-            
-            # Verifica se já existe um tamanho idêntico cadastrado
-            if ProductVariant.objects.filter(product=product, tamanho=variant.tamanho).exists():
-                messages.error(request, f"O tamanho '{variant.tamanho}' já está cadastrado para este produto.")
-            else:
-                try:
-                    variant.save()
-                    messages.success(request, f"Tamanho {variant.tamanho} adicionado com sucesso.")
-                except Exception as e:
-                    messages.error(request, f"Erro ao salvar tamanho: {str(e)}")
-        else:
-            messages.error(request, f"Erro ao adicionar variante: {form.errors.as_text()}")
-        return redirect('product_detail', pk=product_id)
+        messages.info(request, "O gerenciamento de tamanhos e variantes é realizado exclusivamente na tela de edição do EPI.")
+        return redirect('product_update', pk=product_id)
 
 
 class CertificadoAprovacaoListView(LoginRequiredMixin, ListView):
