@@ -67,15 +67,15 @@ class EmployeeCreateView(LoginRequiredMixin, CreateView):
     form_class = EmployeeForm
     template_name = "employees/form.html"
 
-    def get_form(self, form_class=None):
-        form = super().get_form(form_class)
-        user = self.request.user
-        if not user.is_superuser or user.units.exists():
-            form.fields['unit'].queryset = user.units.all()
-        return form
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
 
     def form_valid(self, form):
         form.instance.criado_por = self.request.user
+        if not form.instance.unit_id and form.instance.setor_id:
+            form.instance.unit = form.instance.setor.unit
         response = super().form_valid(form)
         
         # Cria histórico inicial
@@ -91,13 +91,14 @@ class EmployeeCreateView(LoginRequiredMixin, CreateView):
         
         # Grava auditoria
         from audit.models import log_audit
+        mat_display = self.object.matricula or "S/M"
         log_audit(
             request=self.request,
-            action=f"Criação de colaborador: {self.object.nome_completo} (Matrícula: {self.object.matricula})",
+            action=f"Criação de colaborador: {self.object.nome_completo} (Matrícula: {mat_display})",
             model_name="Employee",
             object_id=self.object.id,
             before=None,
-            after={'nome': self.object.nome_completo, 'matricula': self.object.matricula, 'cpf': self.object.cpf}
+            after={'nome': self.object.nome_completo, 'matricula': mat_display, 'cpf': self.object.cpf}
         )
         
         messages.success(self.request, "Colaborador cadastrado com sucesso!")
@@ -112,16 +113,16 @@ class EmployeeUpdateView(LoginRequiredMixin, UpdateView):
     form_class = EmployeeForm
     template_name = "employees/form.html"
 
-    def get_form(self, form_class=None):
-        form = super().get_form(form_class)
-        user = self.request.user
-        if not user.is_superuser or user.units.exists():
-            form.fields['unit'].queryset = user.units.all()
-        return form
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.request.user
+        return kwargs
 
     def form_valid(self, form):
         # Captura valores originais antes de salvar
         old_instance = Employee.objects.get(pk=self.object.pk)
+        if not form.instance.unit_id and form.instance.setor_id:
+            form.instance.unit = form.instance.setor.unit
         response = super().form_valid(form)
         
         # Verifica se houve alteração de campos críticos funcionais
@@ -131,6 +132,9 @@ class EmployeeUpdateView(LoginRequiredMixin, UpdateView):
             old_instance.unit != self.object.unit or
             old_instance.centro_custo != self.object.centro_custo
         )
+
+        old_funcao_nome = old_instance.funcao.nome if old_instance.funcao else "Não informada"
+        new_funcao_nome = self.object.funcao.nome if self.object.funcao else "Não informada"
 
         if has_changed:
             # Encerra o histórico ativo
@@ -147,7 +151,7 @@ class EmployeeUpdateView(LoginRequiredMixin, UpdateView):
                 unit=self.object.unit,
                 centro_custo=self.object.centro_custo,
                 alterado_por=self.request.user,
-                observacao=f"Mudança de cargo/setor. Anterior: {old_instance.funcao.nome} ({old_instance.setor.nome}). Novo: {self.object.funcao.nome} ({self.object.setor.nome})."
+                observacao=f"Mudança de cargo/setor. Anterior: {old_funcao_nome} ({old_instance.setor.nome}). Novo: {new_funcao_nome} ({self.object.setor.nome})."
             )
             messages.info(self.request, "Cadastro e histórico funcional do colaborador atualizados.")
         else:
@@ -155,13 +159,14 @@ class EmployeeUpdateView(LoginRequiredMixin, UpdateView):
             
         # Grava auditoria
         from audit.models import log_audit
+        mat_display = self.object.matricula or "S/M"
         log_audit(
             request=self.request,
-            action=f"Alteração de colaborador: {self.object.nome_completo} (Matrícula: {self.object.matricula})",
+            action=f"Alteração de colaborador: {self.object.nome_completo} (Matrícula: {mat_display})",
             model_name="Employee",
             object_id=self.object.id,
-            before={'funcao': old_instance.funcao.nome, 'setor': old_instance.setor.nome, 'unit': old_instance.unit.codigo, 'centro_custo': old_instance.centro_custo.codigo, 'situacao': old_instance.situacao},
-            after={'funcao': self.object.funcao.nome, 'setor': self.object.setor.nome, 'unit': self.object.unit.codigo, 'centro_custo': self.object.centro_custo.codigo, 'situacao': self.object.situacao}
+            before={'funcao': old_funcao_nome, 'setor': old_instance.setor.nome, 'unit': old_instance.unit.codigo, 'centro_custo': old_instance.centro_custo.codigo, 'situacao': old_instance.situacao},
+            after={'funcao': new_funcao_nome, 'setor': self.object.setor.nome, 'unit': self.object.unit.codigo, 'centro_custo': self.object.centro_custo.codigo, 'situacao': self.object.situacao}
         )
 
         return response
@@ -185,17 +190,20 @@ class EmployeeDetailView(LoginRequiredMixin, DetailView):
         # Carrega histórico funcional
         history = employee.history.all().select_related('funcao', 'setor', 'unit', 'centro_custo')
 
-        # Busca matriz de EPI recomendada para a função do colaborador
-        from ppe.models import PPEMatrix, ExtraordinaryPPE
-        matrix = PPEMatrix.objects.filter(funcao=employee.funcao, ativo=True).select_related('product')
+        # Busca matriz de EPI recomendada através do serviço centralizado
+        from ppe.services import resolve_employee_ppe_matrix
+        matrix_qs, matrix_origin = resolve_employee_ppe_matrix(employee)
         
         # Busca EPIs extraordinários ativos
+        from ppe.models import ExtraordinaryPPE
         extraordinary = ExtraordinaryPPE.objects.filter(employee=employee, ativo=True).select_related('product')
 
         context.update({
             'deliveries': deliveries,
             'history': history,
-            'matrix': matrix,
+            'matrix': matrix_qs,
+            'matrix_origin': matrix_origin,
             'extraordinary': extraordinary,
         })
         return context
+

@@ -12,7 +12,11 @@ urlpatterns = [
     path('sector/add/', SectorCreateView.as_view(), name='sector_create'),
     path('cost-center/add/', CostCenterCreateView.as_view(), name='cost_center_create'),
     path('function/add/', FunctionCreateView.as_view(), name='function_create'),
+    path('functions/add/', FunctionCreateView.as_view()),
     path('function/<int:pk>/', FunctionDetailView.as_view(), name='function_detail'),
+    path('functions/<int:pk>/', FunctionDetailView.as_view()),
+    path('function/<int:pk>/edit/', FunctionDetailView.as_view(), name='function_update'),
+    path('functions/<int:pk>/edit/', FunctionDetailView.as_view()),
     path('location/add/', InventoryLocationCreateView.as_view(), name='location_create'),
 ]
 

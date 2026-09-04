@@ -15,13 +15,13 @@
 | Autor da SPEC | Arquiteto (Antigravity) |
 | Data de criação | 10/07/2026 |
 | Última atualização | 10/07/2026 15:20 |
-| Versão | 1.0.0 |
-| Status | `APROVADA_PARA_IMPLEMENTAÇÃO` |
+| Versão | 1.0.2 |
+| Status | `SUBSTITUÍDA PELA SPEC 2026-015` |
 | Prioridade | ALTA |
 | Risco | MÉDIO |
 | Demanda de origem | Criar interface própria para consultar e gerenciar a Matriz de EPIs por Função |
 | SPEC substituída | Não |
-| SPECs relacionadas | `SPEC-2026-001` (Fundação, Estoques e Controle de EPI) |
+| SPECs relacionadas | `SPEC-2026-001` (Fundação, Estoques e Controle de EPI), `SPEC-2026-015` (Matriz de EPI por Setor e Retirada do Fluxo Legado) |
 
 ### 0.1 Histórico de versões
 
@@ -29,6 +29,8 @@
 |---|---|---|---|---|
 | 0.1.0 | 10/07/2026 | Arquiteto | Rascunho inicial | RASCUNHO |
 | 1.0.0 | 10/07/2026 | Arquiteto | Revisão e aprovação do QA | APROVADA_PARA_IMPLEMENTAÇÃO |
+| 1.0.1 | 03/09/2026 | Arquiteto | Marcada como PARCIALMENTE SUBSTITUÍDA PELA SPEC 2026-015 | PARCIALMENTE SUBSTITUÍDA |
+| 1.0.2 | 03/09/2026 | Arquiteto | Marcada como SUBSTITUÍDA PELA SPEC 2026-015 (Emenda Constitucional nº 02/2026 — Matriz operacional exclusivamente por Setor; encerramento definitivo do mecanismo transitório por Função). | SUBSTITUÍDA PELA SPEC 2026-015 |
 
 ### 0.2 Aprovações
 

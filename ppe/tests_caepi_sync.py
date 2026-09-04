@@ -12,6 +12,7 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 from ppe.models import CertificadoAprovacao, CAEPISyncLog
 from ppe.caepi_sync import CAEPISyncService, CAEPIClient, CAEPIParser, DryRunRollback
+import ppe.ca_services
 
 class CAEPISyncTestCase(TestCase):
     def setUp(self):

@@ -19,7 +19,8 @@ from django.urls import path, include
 from django.http import HttpResponse
 from core.views import (
     DashboardView, ReportListView, ReportStockPositionView,
-    ReportStockMovementsView, ReportPPEDeliveriesView, ReportCAValidityView
+    ReportStockMovementsView, ReportPPEDeliveriesView, ReportCAValidityView,
+    ReportPPEConsumptionCostView
 )
 
 def service_worker(request):
@@ -39,6 +40,7 @@ urlpatterns = [
     path("reports/stock-movements/", ReportStockMovementsView.as_view(), name="report_stock_movements"),
     path("reports/ppe-deliveries/", ReportPPEDeliveriesView.as_view(), name="report_ppe_deliveries"),
     path("reports/ca-validity/", ReportCAValidityView.as_view(), name="report_ca_validity"),
+    path("reports/ppe-consumption-cost/", ReportPPEConsumptionCostView.as_view(), name="report_ppe_consumption_cost"),
     
     # Módulos
     path("accounts/", include("accounts.urls")),

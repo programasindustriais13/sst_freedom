@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Matrizes de EPI por Setor - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item active text-secondary" aria-current="page">Matrizes de EPI por Setor</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <div>
+        <h1 class="mb-1">Matriz de EPI por Setor</h1>
+        <p class="text-secondary small mb-0">Gestão da matriz principal de EPIs agrupada por Setor operacional e de exposição ao risco</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'sector_matrix_create' %}" class="btn btn-premium btn-premium-primary">
+            <i class="bi bi-plus-lg me-1"></i> Nova Matriz por Setor
+        </a>
+    </div>
+</div>
+
+<!-- Filtros e Busca -->
+<div class="card-premium mb-4">
+    <form method="get" action="{% url 'sector_matrix_list' %}" class="row g-3 align-items-end">
+        <div class="col-12 col-md-4">
+            <label for="search-input" class="form-label text-secondary small fw-semibold">Buscar Setor ou Unidade</label>
+            <input type="text" name="q" id="search-input" class="form-control form-control-premium" placeholder="Ex: Produção, Elétrica, CE-01..." value="{{ q }}">
+        </div>
+        <div class="col-12 col-md-3">
+            <label for="company-select" class="form-label text-secondary small fw-semibold">Empresa</label>
+            <select name="company" id="company-select" class="form-select form-control-premium">
+                <option value="">Todas as Empresas</option>
+                {% for company in companies %}
+                <option value="{{ company.id }}" {% if selected_company == company.id|stringformat:"s" %}selected{% endif %}>{{ company.nome_fantasia|default:company.razao_social }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-12 col-md-3">
+            <label for="status-select" class="form-label text-secondary small fw-semibold">Status da Matriz</label>
+            <select name="status" id="status-select" class="form-select form-control-premium">
+                <option value="">Todos os Status</option>
+                <option value="ATIVA" {% if selected_status == 'ATIVA' %}selected{% endif %}>Ativa</option>
+                <option value="EM_ELABORACAO" {% if selected_status == 'EM_ELABORACAO' %}selected{% endif %}>Em Elaboração</option>
+                <option value="SEM_CONFIGURACAO" {% if selected_status == 'SEM_CONFIGURACAO' %}selected{% endif %}>Sem Configuração</option>
+            </select>
+        </div>
+        <div class="col-12 col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-premium btn-premium-primary w-100">
+                <i class="bi bi-search"></i> Filtrar
+            </button>
+            <a href="{% url 'sector_matrix_list' %}" class="btn btn-outline-secondary btn-premium w-100">
+                Limpar
+            </a>
+        </div>
+    </form>
+</div>
+
+<!-- Tabela de Listagem de Setores -->
+<div class="card-premium">
+    <div class="table-responsive">
+        <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-default);">
+            <thead>
+                <tr>
+                    <th class="text-muted border-0" style="font-size: 0.75rem;">Setor</th>
+                    <th class="text-muted border-0" style="font-size: 0.75rem;">Unidade / Filial</th>
+                    <th class="text-muted border-0" style="font-size: 0.75rem;">Empresa</th>
+                    <th class="text-muted border-0 text-center" style="font-size: 0.75rem;">Colaboradores</th>
+                    <th class="text-muted border-0 text-center" style="font-size: 0.75rem;">Status Matriz</th>
+                    <th class="text-muted border-0 text-center" style="font-size: 0.75rem;">Itens Ativos</th>
+                    <th class="text-muted border-0 text-end" style="font-size: 0.75rem;">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sector in sectors %}
+                <tr>
+                    <td class="text-light fw-semibold">
+                        <i class="bi bi-diagram-3 me-1 text-primary"></i> {{ sector.nome }}
+                        {% if sector.codigo %}
+                        <small class="text-muted d-block font-monospace">Cód: {{ sector.codigo }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {{ sector.unit.codigo }} - {{ sector.unit.nome }}
+                    </td>
+                    <td>
+                        <span class="badge bg-secondary">{{ sector.unit.company.nome_fantasia }}</span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-dark border border-secondary">{{ sector.employees.count }}</span>
+                    </td>
+                    <td class="text-center">
+                        {% if sector.ppe_matrix_config.status == 'ATIVA' %}
+                        <span class="badge bg-success" title="Ativada por {{ sector.ppe_matrix_config.ativado_por.username|default:'-' }} em {{ sector.ppe_matrix_config.ativado_em|date:'d/m/Y H:i' }}">
+                            <i class="bi bi-check-circle-fill me-1"></i> Ativa
+                        </span>
+                        {% elif sector.ppe_matrix_config.status == 'EM_ELABORACAO' %}
+                        <span class="badge bg-warning text-dark">
+                            <i class="bi bi-cone-striped me-1"></i> Em Elaboração
+                        </span>
+                        {% else %}
+                        <span class="badge bg-secondary">
+                            <i class="bi bi-dash-circle me-1"></i> Sem Matriz
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <span class="fw-bold text-info">{{ sector.ppe_matrix_entries.filter.count|default:sector.ppe_matrix_entries.all.count }}</span>
+                    </td>
+                    <td class="text-end">
+                        <div class="d-inline-flex gap-2">
+                            <a href="{% url 'sector_matrix_edit' sector.id %}" class="btn btn-sm btn-outline-primary rounded-3" title="Editar Itens da Matriz">
+                                <i class="bi bi-pencil-fill me-1"></i> Configurar
+                            </a>
+                            {% if request.user.is_tecnico or request.user.is_admin %}
+                                {% if sector.ppe_matrix_config.status == 'ATIVA' %}
+                                <form method="post" action="{% url 'sector_matrix_deactivate' sector.id %}" class="d-inline" onsubmit="return confirm('Tem certeza que deseja retornar a matriz deste setor para Em Elaboração? O setor ficará sem matriz ativa até nova ativação.');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-warning rounded-3" title="Retornar para Elaboração">
+                                        <i class="bi bi-pause-fill"></i>
+                                    </button>
+                                </form>
+                                {% else %}
+                                <form method="post" action="{% url 'sector_matrix_activate' sector.id %}" class="d-inline" onsubmit="return confirm('Confirma a ATIVAÇÃO desta matriz de EPI para o setor {{ sector.nome }}? As entregas passarão a seguir estes equipamentos.');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-success rounded-3" title="Ativar Matriz do Setor">
+                                        <i class="bi bi-check-lg me-1"></i> Ativar
+                                    </button>
+                                </form>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted border-0 py-4">Nenhum setor localizado com os filtros informados.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Paginação -->
+{% if is_paginated %}
+<div class="d-flex justify-content-between align-items-center mt-3">
+    <span class="text-secondary small">Mostrando página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    <nav>
+        <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if selected_company %}&company={{ selected_company }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">Anterior</a></li>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if selected_company %}&company={{ selected_company }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">Próxima</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+</div>
+{% endif %}
+{% endblock %}

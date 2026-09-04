@@ -62,9 +62,8 @@
             <thead>
                 <tr>
                     <th class="text-muted border-0">Colaborador</th>
-                    <th class="text-muted border-0">Matrícula</th>
-                    <th class="text-muted border-0">Unidade / Setor</th>
-                    <th class="text-muted border-0">Função</th>
+                    <th class="text-muted border-0">Empresa / Unidade / Setor</th>
+                    <th class="text-muted border-0">Centro de Custo</th>
                     <th class="text-muted border-0 text-center">Status</th>
                     <th class="text-muted border-0 text-center">Ações</th>
                 </tr>
@@ -76,9 +75,11 @@
                         {{ emp.nome_completo }}
                         <small class="text-muted d-block">CPF: {{ emp.cpf }}</small>
                     </td>
-                    <td>{{ emp.matricula }}</td>
-                    <td>{{ emp.unit.codigo }} <small class="text-muted d-block">{{ emp.setor.nome }}</small></td>
-                    <td>{{ emp.funcao.nome }}</td>
+                    <td>
+                        <span class="text-light">{{ emp.setor.nome }}</span>
+                        <small class="text-muted d-block">{{ emp.company.nome_fantasia }} &bull; {{ emp.unit.codigo }}</small>
+                    </td>
+                    <td>{{ emp.centro_custo.codigo }}</td>
                     <td class="text-center">
                         {% if emp.situacao == 'ATIVO' %}
                         <span class="badge bg-success rounded-pill px-3">Ativo</span>
@@ -106,7 +107,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="6" class="text-center text-muted border-0 py-4">Nenhum colaborador encontrado com os filtros aplicados.</td>
+                    <td colspan="5" class="text-center text-muted border-0 py-4">Nenhum colaborador encontrado com os filtros aplicados.</td>
                 </tr>
                 {% endfor %}
             </tbody>

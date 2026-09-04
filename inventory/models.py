@@ -18,6 +18,60 @@ class Supplier(models.Model):
         return self.razao_social
 
 
+import os
+from django.core.exceptions import ValidationError
+
+def validate_fiscal_note_attachment(file):
+    """
+    Valida rigorosamente o anexo de documento fiscal ou recibo:
+    - Formatos permitidos: PDF, JPG, JPEG, PNG
+    - Tamanho máximo: 10 MB
+    - Não vazio (> 0 bytes)
+    - Verificação de cabeçalho binário (PDF com %PDF-, Imagens com Pillow)
+    """
+    if not file:
+        return
+
+    # Se já foi salvo e não está sendo substituído
+    if not hasattr(file, 'size') or not file.name:
+        return
+
+    if file.size == 0:
+        raise ValidationError("O arquivo anexado está vazio (0 bytes).")
+
+    max_size = 10 * 1024 * 1024
+    if file.size > max_size:
+        raise ValidationError("O arquivo anexado excede o tamanho máximo permitido de 10 MB.")
+
+    ext = os.path.splitext(file.name)[1].lower()
+    allowed_extensions = ['.pdf', '.jpg', '.jpeg', '.png']
+    if ext not in allowed_extensions:
+        raise ValidationError(f"Extensão '{ext}' não permitida. Envie arquivos PDF, JPG, JPEG ou PNG.")
+
+    initial_pos = file.tell() if hasattr(file, 'tell') else 0
+    try:
+        header = file.read(1024)
+        if hasattr(file, 'seek'):
+            file.seek(initial_pos)
+
+        if ext == '.pdf':
+            if not header.startswith(b'%PDF-'):
+                raise ValidationError("O arquivo enviado não possui cabeçalho válido de documento PDF.")
+        elif ext in ['.jpg', '.jpeg', '.png']:
+            from PIL import Image
+            try:
+                img = Image.open(file)
+                img.verify()
+                if hasattr(file, 'seek'):
+                    file.seek(initial_pos)
+            except Exception:
+                raise ValidationError("O arquivo de imagem enviado está corrompido ou é inválido.")
+    except ValidationError:
+        raise
+    except Exception as e:
+        raise ValidationError(f"Falha ao inspecionar anexo: {str(e)}")
+
+
 class FiscalNote(models.Model):
     TIPO_CHOICES = (
         ('NOTA_FISCAL', 'Nota Fiscal'),
@@ -28,15 +82,16 @@ class FiscalNote(models.Model):
 
     STATUS_CHOICES = (
         ('RASCUNHO', 'Rascunho'),
-        ('CONFERIDA', 'Conferida (Confirmada)'),
+        ('CONFERIDA', 'Conferida e Integrada ao Estoque'),
         ('CANCELADA', 'Cancelada'),
     )
 
-    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='fiscal_notes', verbose_name="Fornecedor")
-    unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name='fiscal_notes', verbose_name="Unidade Recebedora")
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='NOTA_FISCAL', verbose_name="Tipo de Documento")
-    numero = models.CharField(max_length=50, blank=True, null=True, verbose_name="Número do Documento")
-    serie = models.CharField(max_length=10, blank=True, null=True, verbose_name="Série")
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='fiscal_notes', verbose_name="Fornecedor")
+    unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name='fiscal_notes', verbose_name="Unidade")
+    
+    numero = models.CharField(max_length=50, blank=True, null=True, verbose_name="Número")
+    serie = models.CharField(max_length=20, blank=True, null=True, verbose_name="Série")
     chave_acesso = models.CharField(max_length=44, blank=True, null=True, verbose_name="Chave de Acesso")
     
     data_emissao = models.DateField(verbose_name="Data de Emissão")
@@ -47,7 +102,13 @@ class FiscalNote(models.Model):
     desconto = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Valor do Desconto")
     valor_total = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Valor Total")
     
-    documento_anexo = models.FileField(upload_to='uploads/nfs/', blank=True, null=True, verbose_name="Documento Anexado")
+    documento_anexo = models.FileField(
+        upload_to='uploads/nfs/',
+        blank=True,
+        null=True,
+        validators=[validate_fiscal_note_attachment],
+        verbose_name="Documento Anexado"
+    )
     observacoes = models.TextField(blank=True, null=True, verbose_name="Observações")
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='RASCUNHO', verbose_name="Status")
@@ -66,7 +127,6 @@ class FiscalNote(models.Model):
         return f"{self.get_tipo_display()} {doc_num} - {self.supplier.razao_social}"
 
     def clean(self):
-        from django.core.exceptions import ValidationError
         if self.tipo == 'NOTA_FISCAL':
             errors = {}
             if not self.numero:
@@ -75,6 +135,9 @@ class FiscalNote(models.Model):
                 errors['serie'] = "A série é obrigatória para Nota Fiscal."
             if errors:
                 raise ValidationError(errors)
+
+        if self.documento_anexo:
+            validate_fiscal_note_attachment(self.documento_anexo)
 
 
 class Lot(models.Model):

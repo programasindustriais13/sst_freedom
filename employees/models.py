@@ -37,16 +37,16 @@ class Employee(models.Model):
 
     company = models.ForeignKey(Company, on_delete=models.PROTECT, related_name='employees', verbose_name="Empresa")
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name='employees', verbose_name="Unidade")
-    matricula = models.CharField(max_length=50, verbose_name="Matrícula")
+    matricula = models.CharField(max_length=50, blank=True, null=True, verbose_name="Matrícula")
     nome_completo = models.CharField(max_length=255, verbose_name="Nome Completo")
     cpf = models.CharField(max_length=14, unique=True, validators=[validate_cpf], verbose_name="CPF")
     
-    funcao = models.ForeignKey(Function, on_delete=models.PROTECT, related_name='employees', verbose_name="Função/Cargo")
+    funcao = models.ForeignKey(Function, on_delete=models.PROTECT, blank=True, null=True, related_name='employees', verbose_name="Função/Cargo")
     setor = models.ForeignKey(Sector, on_delete=models.PROTECT, related_name='employees', verbose_name="Setor")
     centro_custo = models.ForeignKey(CostCenter, on_delete=models.PROTECT, related_name='employees', verbose_name="Centro de Custo")
     
     turno = models.CharField(max_length=20, choices=TURNO_CHOICES, default='ADM', verbose_name="Turno")
-    data_admissao = models.DateField(verbose_name="Data de Admissão")
+    data_admissao = models.DateField(blank=True, null=True, verbose_name="Data de Admissão")
     situacao = models.CharField(max_length=20, choices=SITUACAO_CHOICES, default='ATIVO', verbose_name="Situação Cadastral")
     data_desligamento = models.DateField(blank=True, null=True, verbose_name="Data de Desligamento")
     
@@ -72,9 +72,23 @@ class Employee(models.Model):
         unique_together = ('company', 'matricula')
 
     def __str__(self):
-        return f"{self.matricula} - {self.nome_completo}"
+        if self.matricula:
+            return f"{self.matricula} - {self.nome_completo}"
+        return f"{self.nome_completo} (#{self.pk})" if self.pk else self.nome_completo
+
+    @property
+    def identificacao_display(self):
+        if self.matricula:
+            return f"{self.matricula} - {self.nome_completo}"
+        return f"{self.nome_completo} (#{self.pk})" if self.pk else self.nome_completo
 
     def clean(self):
+        # Normalização de matrícula: ausência sempre vira NULL para preservar unique_together no banco
+        if not self.matricula or not str(self.matricula).strip():
+            self.matricula = None
+        else:
+            self.matricula = str(self.matricula).strip()
+
         # Normalização do CPF
         if self.cpf:
             self.cpf = "".join(re.findall(r"\d", str(self.cpf)))
@@ -85,10 +99,17 @@ class Employee(models.Model):
         if self.situacao == 'DESLIGADO' and not self.data_desligamento:
             raise ValidationError({"data_desligamento": "A data de desligamento é obrigatória para colaboradores desligados."})
 
+    def save(self, *args, **kwargs):
+        if not self.matricula or not str(self.matricula).strip():
+            self.matricula = None
+        else:
+            self.matricula = str(self.matricula).strip()
+        super().save(*args, **kwargs)
+
 
 class EmployeeHistory(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='history', verbose_name="Colaborador")
-    funcao = models.ForeignKey(Function, on_delete=models.PROTECT, verbose_name="Função/Cargo")
+    funcao = models.ForeignKey(Function, on_delete=models.PROTECT, blank=True, null=True, verbose_name="Função/Cargo")
     setor = models.ForeignKey(Sector, on_delete=models.PROTECT, verbose_name="Setor")
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, verbose_name="Unidade")
     centro_custo = models.ForeignKey(CostCenter, on_delete=models.PROTECT, verbose_name="Centro de Custo")
@@ -105,4 +126,6 @@ class EmployeeHistory(models.Model):
         ordering = ['-data_inicio']
 
     def __str__(self):
-        return f"{self.employee.nome_completo} - {self.funcao.nome} em {self.data_inicio.strftime('%d/%m/%Y')}"
+        funcao_nome = self.funcao.nome if self.funcao else "Não informada"
+        return f"{self.employee.nome_completo} - {funcao_nome} em {self.data_inicio.strftime('%d/%m/%Y')}"
+

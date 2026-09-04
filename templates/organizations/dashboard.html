@@ -16,7 +16,6 @@
         {% endif %}
         <a href="{% url 'sector_create' %}" class="btn btn-premium btn-premium-primary"><i class="bi bi-plus-lg"></i> Setor</a>
         <a href="{% url 'cost_center_create' %}" class="btn btn-premium btn-premium-primary"><i class="bi bi-plus-lg"></i> CC</a>
-        <a href="{% url 'function_create' %}" class="btn btn-premium btn-premium-primary"><i class="bi bi-plus-lg"></i> Função</a>
         <a href="{% url 'location_create' %}" class="btn btn-premium btn-premium-primary"><i class="bi bi-plus-lg"></i> Local Estoque</a>
     </div>
 </div>
@@ -121,41 +120,8 @@
         </div>
     </div>
 
-    <!-- Funções / Cargos -->
-    <div class="col-12 col-lg-6">
-        <div class="card-premium">
-            <h4 class="mb-3 text-info"><i class="bi bi-briefcase"></i> Funções e Cargos</h4>
-            <div class="table-responsive">
-                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
-                    <thead>
-                        <tr>
-                            <th class="text-muted border-0">Função</th>
-                            <th class="text-muted border-0">Descrição</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for func in functions %}
-                        <tr>
-                            <td class="text-light border-secondary fw-semibold">
-                                <a href="{% url 'function_detail' func.id %}" class="text-link fw-semibold text-decoration-none">
-                                    {{ func.nome }}
-                                </a>
-                            </td>
-                            <td class="border-secondary text-truncate" style="max-width: 250px;">{{ func.descricao|default:"-" }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="2" class="text-center text-muted border-0 py-4">Nenhuma função cadastrada.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
     <!-- Locais de Estoque -->
-    <div class="col-12">
+    <div class="col-12 col-lg-6">
         <div class="card-premium">
             <h4 class="mb-3 text-light"><i class="bi bi-box-seam"></i> Locais de Estoque</h4>
             <div class="table-responsive">

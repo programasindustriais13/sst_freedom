@@ -22,7 +22,7 @@
                         <select name="employee" id="id_employee" class="form-select form-control-premium" required>
                             <option value="">Selecione o trabalhador...</option>
                             {% for emp in form.employee.field.queryset %}
-                            <option value="{{ emp.id }}" {% if form.employee.value|stringformat:"s" == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.matricula }} - {{ emp.nome_completo }} ({{ emp.funcao.nome }})</option>
+                            <option value="{{ emp.id }}" {% if form.employee.value|stringformat:"s" == emp.id|stringformat:"s" %}selected{% endif %}>{{ emp.identificacao_display }}{% if emp.funcao %} ({{ emp.funcao.nome }}){% endif %} - {{ emp.setor.nome }}</option>
                             {% endfor %}
                         </select>
                         {{ form.employee.errors }}

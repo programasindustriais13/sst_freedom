@@ -1,7 +1,10 @@
+import mimetypes
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView, DetailView, CreateView, TemplateView
 from django.urls import reverse
+from django.http import FileResponse, Http404, JsonResponse
+from django.views.decorators.http import require_http_methods
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.contrib import messages
 from django.db import models
@@ -184,6 +187,122 @@ class FiscalNoteDetailView(LoginRequiredMixin, DetailView):
         context['total_items'] = total_items
         context['divergencia'] = total_items != self.object.valor_total
         return context
+
+
+def fiscal_note_download_view(request, pk):
+    """
+    Visualização/Download seguro e autenticado do anexo de documento fiscal.
+    Valida escopo de permissão de unidade e emite cabeçalho X-Content-Type-Options: nosniff.
+    """
+    if not request.user.is_authenticated:
+        raise PermissionDenied("Autenticação necessária.")
+    
+    note = get_object_or_404(FiscalNote, pk=pk)
+    if not request.user.is_superuser and not request.user.units.filter(id=note.unit_id).exists():
+        raise PermissionDenied("Você não possui permissão para acessar documentos da Unidade vinculada.")
+
+    if not note.documento_anexo or not note.documento_anexo.storage.exists(note.documento_anexo.name):
+        raise Http404("Documento anexado não localizado no armazenamento.")
+
+    content_type, _ = mimetypes.guess_type(note.documento_anexo.name)
+    if not content_type:
+        content_type = "application/octet-stream"
+
+    response = FileResponse(note.documento_anexo.open('rb'), content_type=content_type)
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
+
+
+@require_http_methods(["POST"])
+def fiscal_note_delete_attachment_view(request, pk):
+    """
+    Remove anexo de documento fiscal.
+    Permitido apenas para notas no estado RASCUNHO ou administradores.
+    """
+    if not request.user.is_authenticated:
+        raise PermissionDenied("Autenticação necessária.")
+
+    note = get_object_or_404(FiscalNote, pk=pk)
+    if not request.user.is_superuser and not request.user.units.filter(id=note.unit_id).exists():
+        raise PermissionDenied("Você não possui permissão para alterar documentos da Unidade vinculada.")
+
+    if note.status != 'RASCUNHO' and not (request.user.is_admin() or request.user.is_superuser):
+        messages.error(request, "Apenas documentos fiscais em Rascunho ou Administradores podem remover anexos.")
+        return redirect('fiscal_note_detail', pk=note.pk)
+
+    if note.documento_anexo:
+        old_filename = note.documento_anexo.name
+        try:
+            note.documento_anexo.close()
+            note.documento_anexo.delete(save=False)
+        except Exception:
+            pass
+        note.documento_anexo = None
+        note.save()
+
+        from audit.models import log_audit
+        log_audit(
+            request=request,
+            action=f"Remoção de anexo da Nota Fiscal/Recibo: {note.numero or 'S/N'}",
+            model_name="FiscalNote",
+            object_id=note.id,
+            before={'anexo': old_filename},
+            after={'anexo': None}
+        )
+        messages.success(request, "Documento anexo removido com sucesso.")
+    else:
+        messages.info(request, "Nenhum anexo encontrado para remoção.")
+
+    return redirect('fiscal_note_detail', pk=note.pk)
+
+
+@require_http_methods(["POST"])
+def fiscal_note_upload_attachment_view(request, pk):
+    """
+    Upload ou substituição de anexo na tela de detalhe do documento fiscal.
+    """
+    if not request.user.is_authenticated:
+        raise PermissionDenied("Autenticação necessária.")
+
+    note = get_object_or_404(FiscalNote, pk=pk)
+    if not request.user.is_superuser and not request.user.units.filter(id=note.unit_id).exists():
+        raise PermissionDenied("Você não possui permissão para alterar documentos da Unidade vinculada.")
+
+    uploaded_file = request.FILES.get('documento_anexo')
+    if not uploaded_file:
+        messages.error(request, "Nenhum arquivo foi selecionado para upload.")
+        return redirect('fiscal_note_detail', pk=note.pk)
+
+    from .models import validate_fiscal_note_attachment
+    try:
+        validate_fiscal_note_attachment(uploaded_file)
+    except ValidationError as e:
+        messages.error(request, f"Arquivo inválido: {e.message if hasattr(e, 'message') else str(e)}")
+        return redirect('fiscal_note_detail', pk=note.pk)
+
+    # Se já existia anexo, tenta remover o anterior do storage
+    if note.documento_anexo:
+        try:
+            note.documento_anexo.close()
+            note.documento_anexo.delete(save=False)
+        except Exception:
+            pass
+
+    note.documento_anexo = uploaded_file
+    note.save()
+
+    from audit.models import log_audit
+    log_audit(
+        request=request,
+        action=f"Upload de anexo para Nota Fiscal/Recibo: {note.numero or 'S/N'}",
+        model_name="FiscalNote",
+        object_id=note.id,
+        before=None,
+        after={'anexo': note.documento_anexo.name}
+    )
+    messages.success(request, "Documento anexado com sucesso!")
+    return redirect('fiscal_note_detail', pk=note.pk)
+
 
 
 class LotCreateView(LoginRequiredMixin, CreateView):
@@ -524,6 +643,8 @@ def minimum_stock_update_view(request):
     if not request.user.is_authenticated:
         raise PermissionDenied("Acesso não autorizado.")
         
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', '')
+
     if request.method == 'POST':
         variant_id = request.POST.get('variant_id')
         location_id = request.POST.get('location_id')
@@ -532,14 +653,24 @@ def minimum_stock_update_view(request):
         try:
             val = int(estoque_minimo)
             if val < 0:
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': "O estoque mínimo não pode ser negativo."}, status=400)
                 messages.error(request, "O estoque mínimo não pode ser negativo.")
                 return redirect(request.META.get('HTTP_REFERER', 'minimum_stock_list'))
         except (ValueError, TypeError):
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': "Valor de estoque mínimo inválido."}, status=400)
             messages.error(request, "Valor de estoque mínimo inválido.")
             return redirect(request.META.get('HTTP_REFERER', 'minimum_stock_list'))
 
         variant = get_object_or_404(ProductVariant, pk=variant_id)
         location = get_object_or_404(InventoryLocation, pk=location_id)
+
+        # Valida permissão de unidade
+        if not request.user.is_superuser and not request.user.units.filter(id=location.unit_id).exists():
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': "Permissão negada para este local."}, status=403)
+            raise PermissionDenied("Permissão negada para este local.")
 
         from .models import LocationStockMinimo
         min_obj, created = LocationStockMinimo.objects.get_or_create(
@@ -565,8 +696,48 @@ def minimum_stock_update_view(request):
             after={'estoque_minimo': val}
         )
 
+        bal = get_stock_balance(location, variant)
+        if val == 0:
+            sit = 'SEM_MINIMO'
+            sit_label = 'Sem Mínimo'
+            badge_class = 'bg-secondary text-muted'
+        elif bal < val:
+            sit = 'ABAIXO'
+            sit_label = f'Abaixo (Falta {val - bal})'
+            badge_class = 'bg-danger'
+        elif bal == val:
+            sit = 'NO_LIMITE'
+            sit_label = 'No Limite'
+            badge_class = 'bg-warning text-dark'
+        else:
+            sit = 'NORMAL'
+            sit_label = 'Normal'
+            badge_class = 'bg-success'
+
+        if is_ajax:
+            return JsonResponse({
+                'success': True,
+                'variant_id': variant.id,
+                'location_id': location.id,
+                'saldo': bal,
+                'minimo': val,
+                'faltante': max(0, val - bal) if val > 0 else 0,
+                'situacao': sit,
+                'situacao_label': sit_label,
+                'badge_class': badge_class,
+                'message': f"Estoque mínimo atualizado para {val} unidades em {location.nome}."
+            })
+
         messages.success(request, f"Estoque mínimo atualizado para {val} unidades em {location.nome}.")
-        return redirect(request.META.get('HTTP_REFERER', 'minimum_stock_list'))
+
+        from django.utils.http import url_has_allowed_host_and_scheme
+        next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('minimum_stock_list')
+        anchor = f"#item-{variant.id}-{location.id}"
+        if url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+            if '#' not in next_url:
+                next_url = f"{next_url}{anchor}"
+            return redirect(next_url)
+        return redirect(f"{reverse('minimum_stock_list')}{anchor}")
 
     return redirect('minimum_stock_list')
 

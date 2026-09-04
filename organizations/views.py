@@ -1,4 +1,6 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib import messages
+from django.views import View
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView, CreateView, UpdateView, TemplateView, DetailView
 from django.urls import reverse_lazy
@@ -20,7 +22,6 @@ class OrganizationDashboardView(LoginRequiredMixin, TemplateView):
             'units': Unit.objects.filter(id__in=user_units),
             'sectors': Sector.objects.filter(unit__in=user_units),
             'cost_centers': CostCenter.objects.all(),
-            'functions': Function.objects.all(),
             'locations': InventoryLocation.objects.filter(unit__in=user_units),
         })
         return context
@@ -45,7 +46,7 @@ class CompanyCreateView(LoginRequiredMixin, CreateView):
 
 class UnitCreateView(LoginRequiredMixin, CreateView):
     model = Unit
-    fields = ['company', 'codigo', 'nome', 'cidade', 'estado', 'ativo']
+    fields = ['company', 'codigo', 'nome', 'cnpj', 'cidade', 'estado', 'ativo']
     template_name = "organizations/form.html"
     success_url = reverse_lazy('organization_dashboard')
 
@@ -62,13 +63,12 @@ class UnitCreateView(LoginRequiredMixin, CreateView):
 
 class SectorCreateView(LoginRequiredMixin, CreateView):
     model = Sector
-    fields = ['unit', 'nome', 'codigo', 'ativo']
+    fields = ['unit', 'codigo', 'nome', 'ativo']
     template_name = "organizations/form.html"
     success_url = reverse_lazy('organization_dashboard')
 
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
-        # Filtra unidades permitidas
         user = self.request.user
         if not user.is_superuser or user.units.exists():
             form.fields['unit'].queryset = user.units.all()
@@ -92,18 +92,6 @@ class CostCenterCreateView(LoginRequiredMixin, CreateView):
         return context
 
 
-class FunctionCreateView(LoginRequiredMixin, CreateView):
-    model = Function
-    fields = ['company', 'nome', 'descricao', 'ativo']
-    template_name = "organizations/form.html"
-    success_url = reverse_lazy('organization_dashboard')
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['title'] = "Nova Função/Cargo"
-        return context
-
-
 class InventoryLocationCreateView(LoginRequiredMixin, CreateView):
     model = InventoryLocation
     fields = ['unit', 'codigo', 'nome', 'tipo', 'ativo']
@@ -123,14 +111,16 @@ class InventoryLocationCreateView(LoginRequiredMixin, CreateView):
         return context
 
 
-class FunctionDetailView(LoginRequiredMixin, DetailView):
-    model = Function
-    template_name = "organizations/function_detail.html"
-    context_object_name = "function"
+class LegacyFunctionRedirectView(LoginRequiredMixin, View):
+    """
+    Redireciona tentativas de acesso a cadastro/edição/detalhe de Função
+    para o dashboard de organizações com mensagem explicativa.
+    """
+    def dispatch(self, request, *args, **kwargs):
+        messages.info(request, "O cadastro de Funções/Cargos não faz mais parte do fluxo atual.")
+        return redirect('organization_dashboard')
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        from ppe.models import PPEMatrix
-        context['matrix_entries'] = PPEMatrix.objects.filter(funcao=self.object).select_related('product', 'variant').order_by('product__nome')
-        return context
 
+# Compatibilidade caso imports usem os nomes antigos
+FunctionCreateView = LegacyFunctionRedirectView
+FunctionDetailView = LegacyFunctionRedirectView

@@ -1,9 +1,10 @@
 # Constituição do Projeto SST Freedom
 
 **Arquivo:** `contexto/constitution.md`  
-**Versão:** 1.0.0  
+**Versão:** 1.2.0  
 **Data de criação:** 09/07/2026  
-**Status:** Vigente  
+**Última atualização (Emenda nº 02):** 03/09/2026  
+**Status:** Vigente (com Emendas nº 01 e nº 02)  
 **Projeto:** SST Freedom  
 **Tecnologia principal:** Django  
 **Idioma da interface:** Português do Brasil  
@@ -448,17 +449,27 @@ Manter separados:
 - C.A. não encontrado ou desatualizado deve gerar estado visível.
 - Correção manual exige justificativa e auditoria.
 
-### 10.3 Matriz por função
+### 10.3 Matriz de EPI exclusivamente por Setor
 
-A matriz de EPI por função representa a necessidade principal da atividade.
+A matriz operacional de EPI vincula-se exclusivamente ao **Setor** do colaborador (agrupamento operacional de trabalhadores com exposição e EPIs em comum).
 
-Ela:
+Regras da Matriz de EPI exclusivamente por Setor (Emenda Constitucional nº 02/2026):
 
-- não comprova entrega;
-- não movimenta estoque automaticamente;
-- não apaga histórico quando alterada;
-- deve possuir vigência quando necessário;
-- deve permitir vida útil e quantidade padrão configuráveis.
+1. A Matriz de EPI operacional é exclusivamente por Setor.
+2. Função/Cargo não faz parte do cadastro operacional atual do colaborador.
+3. O módulo de EPI não consulta matriz por Função.
+4. Não existe mesclagem entre matriz de Setor e matriz de Função.
+5. Na ausência de matriz ativa do Setor, o sistema informa claramente o estado de domínio: *"Setor sem Matriz de EPI ativa."* Não há fallback operacional para Função.
+6. O fluxo extraordinário de EPI permanece separado, quando aplicável, exigindo justificativa formal.
+7. Campos ou tabelas antigas podem permanecer tecnicamente no banco de dados até uma futura limpeza estrutural, mas não podem ser usados pelo fluxo operacional atual.
+8. A permanência técnica de uma coluna ou tabela no banco não significa permanência do conceito na interface, menus, formulários ou relatórios operacionais.
+9. Entregas históricas permanecem imutáveis.
+10. A ativação da matriz do Setor deve ser explícita (estados controlados: `EM_ELABORACAO` e `ATIVA`). Uma matriz vazia não pode ser ativada.
+11. A matriz de recomendação:
+   - não comprova entrega;
+   - não movimenta estoque automaticamente;
+   - não apaga histórico quando alterada;
+   - permite vida útil, quantidade padrão, obrigatoriedade e indicação de EPI principal configuráveis.
 
 ### 10.4 EPI extraordinário
 
@@ -466,7 +477,7 @@ EPI extraordinário:
 
 - pertence a uma necessidade específica do colaborador;
 - exige motivo;
-- não altera a matriz da função;
+- não altera a matriz do Setor;
 - não aparece como EPI principal;
 - permanece no histórico e nos custos;
 - deve ser filtrável separadamente.
@@ -476,9 +487,8 @@ EPI extraordinário:
 Entrega individual deve registrar o contexto no momento da operação:
 
 - colaborador;
-- função;
 - setor;
-- centro de custo;
+- centro de custo (quando aplicável);
 - unidade;
 - produto e variante;
 - lote;
@@ -488,7 +498,7 @@ Entrega individual deve registrar o contexto no momento da operação:
 - custo;
 - data;
 - responsável;
-- origem da necessidade;
+- origem da recomendação/necessidade (`SETOR` ou `EXTRAORDINARIA`);
 - vida útil aplicada;
 - próxima troca;
 - ciência ou pendência de ciência.
@@ -914,6 +924,44 @@ Versionamento sugerido:
 - **PATCH:** esclarecimento sem alterar obrigação;
 - **MINOR:** nova regra compatível;
 - **MAJOR:** mudança incompatível ou retirada de proteção.
+
+### 23.1 Registro de Emendas Constitucionais
+
+| Nº Emenda | Data | Versão | Tipo | Responsável | Seções Afetadas | Motivo e Resumo | Parecer QA |
+|---|---|---|---|---|---|---|---|
+| **01/2026** | 03/09/2026 | **1.1.0** | MINOR | Arquiteto / QA SST Freedom | §10.3, §10.4, §10.5, §23 | Migração da Matriz de EPI principal para vínculo com Setor (agrupamento operacional de risco e exposição em comum), mantendo Função como legado transitório com fallback controlado, sem união silenciosa de matrizes, tornando Função opcional para novos colaboradores sem alterar entregas históricas. | APROVADA |
+| **02/2026** | 03/09/2026 | **1.2.0** | MAJOR | Arquiteto / QA SST Freedom | §10.3, §10.4, §10.5, §23 | Encerramento definitivo do mecanismo transitório da Matriz por Função. Matriz operacional de EPI exclusivamente por Setor; eliminação de fallback e de `FUNCAO_LEGADO`; exclusão de Função/Cargo do fluxo operacional e da interface; preservação de registros históricos e integridade das entregas anteriores. | APROVADA |
+
+### 23.2 Histórico de redações anteriores preservadas
+
+#### Redação original da Seção 10.3 (Versão 1.0.0 — 09/07/2026 a 03/09/2026):
+> *"### 10.3 Matriz por função*  
+> *A matriz de EPI por função representa a necessidade principal da atividade.*  
+> *Ela:*  
+> *- não comprova entrega;*  
+> *- não movimenta estoque automaticamente;*  
+> *- não apaga histórico quando alterada;*  
+> *- deve possuir vigência quando necessário;*  
+> *- deve permitir vida útil e quantidade padrão configuráveis."*  
+> *(Substituída pela Emenda nº 01/2026 em 03/09/2026, preservando-se o histórico).*
+
+#### Redação da Seção 10.3 sob a Emenda nº 01/2026 (Versão 1.1.0 — 03/09/2026):
+> *"### 10.3 Matriz de EPI por Setor e legado por Função*  
+> *A matriz principal de EPI passa a ser vinculada ao Setor do colaborador (agrupamento operacional de trabalhadores com exposição e EPIs em comum).*  
+> *Regras da Matriz de EPI por Setor e do Legado por Função (Emenda Constitucional nº 01/2026):*  
+> *1. A matriz principal de EPI vincula-se ao Setor.*  
+> *2. A matriz legada por Função permanece como mecanismo transitório de compatibilidade.*  
+> *3. O fallback por Função deve ser temporário, controlado e registrado em log (`logger.warning`), sem expor dados pessoais excessivos.*  
+> *4. A matriz do Setor e a matriz legada da Função nunca podem ser mescladas silenciosamente nem concatenadas.*  
+> *5. A Função permanece preservada nos registros antigos.*  
+> *6. A Função passa a ser opcional para novos colaboradores.*  
+> *7. A ausência de Função não impede o uso de uma matriz de Setor válida e ativa.*  
+> *8. A origem da recomendação de EPI deve ser rastreável e identificável no sistema: SETOR, FUNCAO_LEGADO, EXTRAORDINARIA.*  
+> *9. Alterações futuras na matriz ou no cadastro do colaborador nunca modificam entregas históricas.*  
+> *10. O EPI extraordinário não altera a matriz do Setor nem a matriz da Função.*  
+> *11. A ativação da matriz do Setor deve ser explícita (estados controlados: EM_ELABORACAO e ATIVA). Uma matriz vazia não pode ser ativada.*  
+> *12. A matriz de recomendação: não comprova entrega; não movimenta estoque automaticamente; não apaga histórico quando alterada; permite vida útil e quantidade padrão configuráveis."*  
+> *(Substituída pela Emenda nº 02/2026 em 03/09/2026, encerrando o mecanismo transitório e firmando matriz operacional exclusivamente por Setor).*
 
 ---
 

@@ -50,15 +50,6 @@
                 </select>
             </div>
             <div class="col-12 col-md-3">
-                <label class="form-label text-secondary small fw-semibold">Função / Cargo</label>
-                <select name="funcao" class="form-select form-control-premium">
-                    <option value="">-- Todas as Funções --</option>
-                    {% for f in functions %}
-                    <option value="{{ f.id }}" {% if filter_funcao|stringformat:"s" == f.id|stringformat:"s" %}selected{% endif %}>{{ f.nome }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-12 col-md-3">
                 <label class="form-label text-secondary small fw-semibold">Status Ciência</label>
                 <select name="status_assinatura" class="form-select form-control-premium">
                     <option value="">-- Todos --</option>

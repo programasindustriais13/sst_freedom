@@ -82,9 +82,15 @@ class PPEServicesTestCase(TestCase):
             user=self.user
         )
 
-        # Setup PPE Matrix
+        # Setup PPE Matrix por Setor (Principal)
+        from ppe.models import SectorPPEMatrix
+        self.sector_config = SectorPPEMatrix.objects.create(
+            sector=self.sector,
+            status='ATIVA',
+            ativado_por=self.user
+        )
         self.matrix = PPEMatrix.objects.create(
-            funcao=self.funcao,
+            setor=self.sector,
             product=self.product,
             quantidade_padrao=1,
             vida_util_dias=120,
@@ -112,6 +118,47 @@ class PPEServicesTestCase(TestCase):
 
         # Stock balance in SST should be 4
         self.assertEqual(get_stock_balance(self.loc_sst, self.variant, self.lot), 4)
+
+    def test_deliver_ppe_no_active_sector_matrix_requires_justification(self):
+        from django.core.exceptions import ValidationError
+        # Retorna a matriz do setor para EM_ELABORACAO
+        self.sector_config.status = 'EM_ELABORACAO'
+        self.sector_config.save()
+        self.matrix.delete()
+
+        # Mesmo com matriz legada por função no banco, ela NÃO é utilizada
+        PPEMatrix.objects.create(
+            funcao=self.funcao,
+            product=self.product,
+            quantidade_padrao=1,
+            vida_util_dias=90,
+            ativo=True
+        )
+
+        # Sem justificativa, deve ser rejeitada
+        with self.assertRaises(ValidationError):
+            deliver_ppe(
+                employee=self.employee,
+                product_variant=self.variant,
+                lot=self.lot,
+                quantity=1,
+                user=self.user,
+                data_entrega=timezone.now().date(),
+                natureza_entrega='FORNECIMENTO_INICIAL'
+            )
+
+        # Com justificativa formal, a entrega ocorre como EXTRAORDINARIA
+        delivery = deliver_ppe(
+            employee=self.employee,
+            product_variant=self.variant,
+            lot=self.lot,
+            quantity=1,
+            user=self.user,
+            data_entrega=timezone.now().date(),
+            natureza_entrega='EXTRAORDINARIA',
+            motivo_substituicao="Fornecimento autorizado em caráter emergencial para setor sem matriz ativa."
+        )
+        self.assertEqual(delivery.origem_necessidade, 'EXTRAORDINARIA')
 
     def test_deliver_ppe_insufficient_stock(self):
         with self.assertRaises(InsufficientStockError):

@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório de Consumo e Custo de EPIs - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'report_list' %}" class="text-primary text-decoration-none">Relatórios</a></li>
+<li class="breadcrumb-item active text-secondary" aria-current="page">Consumo e Custo de EPIs</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+    <div>
+        <h1 class="mb-1"><i class="bi bi-currency-dollar text-success me-2"></i> Relatório de Consumo e Custo de EPIs</h1>
+        <p class="text-secondary small mb-0">Consumo físico e valoração financeira histórica de EPIs agrupados por Setor e por Colaborador</p>
+    </div>
+</div>
+
+<!-- Filtros de Pesquisa -->
+<div class="card-premium mb-4">
+    <form method="get" action="{% url 'report_ppe_consumption_cost' %}" class="row g-3">
+        <div class="col-12 col-md-3">
+            <label for="id_data_inicio" class="form-label text-secondary small fw-semibold">Data Inicial</label>
+            <input type="date" name="data_inicio" id="id_data_inicio" class="form-control form-control-premium" value="{{ filter_data_inicio }}">
+        </div>
+        <div class="col-12 col-md-3">
+            <label for="id_data_fim" class="form-label text-secondary small fw-semibold">Data Final</label>
+            <input type="date" name="data_fim" id="id_data_fim" class="form-control form-control-premium" value="{{ filter_data_fim }}">
+        </div>
+        <div class="col-12 col-md-3">
+            <label for="id_company" class="form-label text-secondary small fw-semibold">Empresa</label>
+            <select name="company" id="id_company" class="form-select form-control-premium">
+                <option value="">Todas as Empresas</option>
+                {% for comp in companies %}
+                <option value="{{ comp.id }}" {% if filter_company == comp.id|stringformat:"s" %}selected{% endif %}>{{ comp.nome_fantasia }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-12 col-md-3">
+            <label for="id_unit" class="form-label text-secondary small fw-semibold">Unidade</label>
+            <select name="unit" id="id_unit" class="form-select form-control-premium">
+                <option value="">Todas as Unidades</option>
+                {% for u in units %}
+                <option value="{{ u.id }}" {% if filter_unit == u.id|stringformat:"s" %}selected{% endif %}>{{ u.codigo }} - {{ u.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-12 col-md-3">
+            <label for="id_setor" class="form-label text-secondary small fw-semibold">Setor Histórico</label>
+            <select name="setor" id="id_setor" class="form-select form-control-premium">
+                <option value="">Todos os Setores</option>
+                {% for s in sectors %}
+                <option value="{{ s.id }}" {% if filter_setor == s.id|stringformat:"s" %}selected{% endif %}>{{ s.nome }} ({{ s.unit.codigo }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-12 col-md-3">
+            <label for="id_employee" class="form-label text-secondary small fw-semibold">Colaborador</label>
+            <input type="text" name="employee" id="id_employee" class="form-control form-control-premium" placeholder="Nome, Matrícula ou CPF..." value="{{ filter_employee }}">
+        </div>
+        <div class="col-12 col-md-3">
+            <label for="id_product" class="form-label text-secondary small fw-semibold">EPI / Equipamento</label>
+            <select name="product" id="id_product" class="form-select form-control-premium">
+                <option value="">Todos os Equipamentos</option>
+                {% for p in products %}
+                <option value="{{ p.id }}" {% if filter_product == p.id|stringformat:"s" %}selected{% endif %}>{{ p.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-12 col-md-3 d-flex align-items-end gap-2">
+            <button type="submit" class="btn btn-premium btn-premium-primary w-100">
+                <i class="bi bi-search"></i> Filtrar
+            </button>
+            <a href="{% url 'report_ppe_consumption_cost' %}" class="btn btn-outline-secondary btn-premium w-100">
+                Limpar
+            </a>
+        </div>
+    </form>
+</div>
+
+<!-- Cards de Resumo Geral (KPIs) -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="card-premium text-center p-3">
+            <span class="text-secondary small d-block mb-1">Custo Conhecido Total</span>
+            <h4 class="text-success fw-bold mb-0">R$ {{ total_custo|floatformat:2 }}</h4>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="card-premium text-center p-3">
+            <span class="text-secondary small d-block mb-1">Peças Entregues</span>
+            <h4 class="text-light fw-bold mb-0">{{ total_pecas }}</h4>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="card-premium text-center p-3">
+            <span class="text-secondary small d-block mb-1">Total de Entregas</span>
+            <h4 class="text-primary fw-bold mb-0">{{ total_entregas }}</h4>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="card-premium text-center p-3">
+            <span class="text-secondary small d-block mb-1">Setores Atendidos</span>
+            <h4 class="text-info fw-bold mb-0">{{ total_setores }}</h4>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="card-premium text-center p-3">
+            <span class="text-secondary small d-block mb-1">Colaboradores</span>
+            <h4 class="text-warning fw-bold mb-0">{{ total_colaboradores }}</h4>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="card-premium text-center p-3">
+            <span class="text-secondary small d-block mb-1">Itens s/ Custo Hist.</span>
+            <h4 class="{% if itens_sem_custo > 0 %}text-danger{% else %}text-muted{% endif %} fw-bold mb-0">{{ itens_sem_custo }}</h4>
+        </div>
+    </div>
+</div>
+
+{% if itens_sem_custo > 0 %}
+<div class="alert alert-warning d-flex align-items-center mb-4" role="alert">
+    <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+    <div>
+        <strong>Aviso sobre valoração de registros:</strong> Existem <strong>{{ itens_sem_custo }}</strong> entrega(s) cujo lote de entrada não continha custo unitário registrado. Em conformidade com a Constituição do sistema, o custo não foi forçado para R$ 0,00 e é indicado como "Custo histórico não disponível".
+    </div>
+</div>
+{% endif %}
+
+<!-- Navegação por Abas para as 3 Visões -->
+<ul class="nav nav-tabs border-secondary mb-4" id="reportTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active bg-transparent text-light border-secondary" id="setores-tab" data-bs-toggle="tab" data-bs-target="#setores-pane" type="button" role="tab">
+            <i class="bi bi-diagram-3-fill text-primary me-1"></i> Resumo por Setor ({{ resumo_setores|length }})
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link bg-transparent text-light border-secondary" id="colaboradores-tab" data-bs-toggle="tab" data-bs-target="#colaboradores-pane" type="button" role="tab">
+            <i class="bi bi-people-fill text-info me-1"></i> Consumo por Colaborador ({{ resumo_colaboradores|length }})
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link bg-transparent text-light border-secondary" id="detalhe-tab" data-bs-toggle="tab" data-bs-target="#detalhe-pane" type="button" role="tab">
+            <i class="bi bi-list-ul text-warning me-1"></i> Detalhe Individual das Entregas ({{ total_entregas }})
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="reportTabsContent">
+    <!-- Aba 1: Resumo por Setor -->
+    <div class="tab-pane fade show active" id="setores-pane" role="tabpanel">
+        <div class="card-premium">
+            <h5 class="text-light mb-3"><i class="bi bi-diagram-3 text-primary me-2"></i> Consumo e Custo Agrupado por Setor Histórico</h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-default);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">Setor Histórico</th>
+                            <th class="text-muted border-0">Unidade / Empresa</th>
+                            <th class="text-muted border-0 text-center">Colaboradores</th>
+                            <th class="text-muted border-0 text-center">Entregas</th>
+                            <th class="text-muted border-0 text-center">Peças Fornecidas</th>
+                            <th class="text-muted border-0 text-end">Custo Conhecido Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in resumo_setores %}
+                        <tr>
+                            <td class="text-light fw-semibold">
+                                <i class="bi bi-diagram-3 me-1 text-primary"></i> {{ s.setor.nome }}
+                            </td>
+                            <td>
+                                {{ s.setor.unit.codigo }} - {{ s.setor.unit.company.nome_fantasia }}
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-secondary">{{ s.total_colaboradores }}</span>
+                            </td>
+                            <td class="text-center">{{ s.entregas_count }}</td>
+                            <td class="text-center fw-bold">{{ s.total_pecas }}</td>
+                            <td class="text-end fw-bold text-success">
+                                R$ {{ s.total_custo|floatformat:2 }}
+                                {% if s.itens_sem_custo > 0 %}
+                                <small class="text-warning d-block font-monospace">({{ s.itens_sem_custo }} s/ custo)</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted border-0 py-4">Nenhum registro de fornecimento encontrado para os filtros selecionados.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Aba 2: Consumo por Colaborador -->
+    <div class="tab-pane fade" id="colaboradores-pane" role="tabpanel">
+        <div class="card-premium">
+            <h5 class="text-light mb-3"><i class="bi bi-person-badge text-info me-2"></i> Consumo e Custo Agrupado por Colaborador e Setor</h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-default);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">Colaborador</th>
+                            <th class="text-muted border-0">Setor Histórico</th>
+                            <th class="text-muted border-0 text-center">Entregas</th>
+                            <th class="text-muted border-0 text-center">Peças Fornecidas</th>
+                            <th class="text-muted border-0 text-end">Custo Total</th>
+                            <th class="text-muted border-0 text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in resumo_colaboradores %}
+                        <tr>
+                            <td class="text-light fw-semibold">
+                                {{ c.employee.nome_completo }}
+                                <small class="text-muted d-block font-monospace">
+                                    {% if c.employee.matricula %}Mat: {{ c.employee.matricula }}{% else %}#{{ c.employee.id }}{% endif %} | CPF: {{ c.employee.cpf }}
+                                </small>
+                            </td>
+                            <td>{{ c.setor.nome }} ({{ c.setor.unit.codigo }})</td>
+                            <td class="text-center">{{ c.entregas_count }}</td>
+                            <td class="text-center fw-bold">{{ c.total_pecas }}</td>
+                            <td class="text-end fw-bold text-success">
+                                R$ {{ c.total_custo|floatformat:2 }}
+                                {% if c.itens_sem_custo > 0 %}
+                                <small class="text-warning d-block font-monospace">({{ c.itens_sem_custo }} s/ custo)</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <a href="{% url 'employee_detail' c.employee.id %}" class="btn btn-sm btn-outline-primary rounded-3" title="Visualizar Ficha">
+                                    <i class="bi bi-eye"></i> Ficha
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted border-0 py-4">Nenhum colaborador localizado com os filtros selecionados.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Aba 3: Detalhe Individual das Entregas -->
+    <div class="tab-pane fade" id="detalhe-pane" role="tabpanel">
+        <div class="card-premium">
+            <h5 class="text-light mb-3"><i class="bi bi-list-check text-warning me-2"></i> Detalhe Individual das Entregas Realizadas</h5>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-default);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">Data</th>
+                            <th class="text-muted border-0">Colaborador</th>
+                            <th class="text-muted border-0">Setor Histórico</th>
+                            <th class="text-muted border-0">EPI / Variante</th>
+                            <th class="text-muted border-0">C.A. / Lote</th>
+                            <th class="text-muted border-0 text-center">Qtd</th>
+                            <th class="text-muted border-0 text-end">Custo Unit.</th>
+                            <th class="text-muted border-0 text-end">Custo Total</th>
+                            <th class="text-muted border-0 text-center">Ciência</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in deliveries %}
+                        <tr>
+                            <td>{{ d.data_entrega|date:"d/m/Y" }}</td>
+                            <td class="text-light fw-semibold">
+                                {{ d.employee.nome_completo }}
+                                <small class="text-muted d-block">
+                                    {% if d.employee.matricula %}Mat: {{ d.employee.matricula }}{% else %}#{{ d.employee.id }}{% endif %}
+                                </small>
+                            </td>
+                            <td>{{ d.setor.nome }}</td>
+                            <td>
+                                {{ d.product_variant.product.nome }}
+                                {% if d.product_variant.tamanho %}
+                                <span class="badge bg-dark border border-secondary">{{ d.product_variant.tamanho }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ d.ca_entregue.numero_exibicao|default:"CA N/A" }}
+                                <small class="text-muted d-block">Lote: {{ d.lot.identificador }}</small>
+                            </td>
+                            <td class="text-center fw-bold">{{ d.quantidade }}</td>
+                            <td class="text-end">
+                                {% if d.custo_unitario is not None %}
+                                R$ {{ d.custo_unitario|floatformat:2 }}
+                                {% else %}
+                                <span class="badge bg-secondary">Indisponível</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end fw-bold text-success">
+                                {% if d.custo_total is not None %}
+                                R$ {{ d.custo_total|floatformat:2 }}
+                                {% else %}
+                                <span class="badge bg-secondary">Indisponível</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if d.status_assinatura == 'ASSINADO' %}
+                                <span class="badge bg-success"><i class="bi bi-check-lg"></i> Assinado</span>
+                                {% elif d.status_assinatura == 'REGISTRADO_OPERADOR' %}
+                                <span class="badge bg-secondary">Operador</span>
+                                {% else %}
+                                <span class="badge bg-info text-dark">Pendente</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted border-0 py-4">Nenhuma entrega individual registrada no período.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação das Entregas -->
+            {% if is_paginated %}
+            <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top border-secondary">
+                <span class="text-secondary small">Mostrando página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if filter_data_inicio %}&data_inicio={{ filter_data_inicio }}{% endif %}{% if filter_data_fim %}&data_fim={{ filter_data_fim }}{% endif %}{% if filter_company %}&company={{ filter_company }}{% endif %}{% if filter_unit %}&unit={{ filter_unit }}{% endif %}{% if filter_setor %}&setor={{ filter_setor }}{% endif %}{% if filter_employee %}&employee={{ filter_employee }}{% endif %}{% if filter_product %}&product={{ filter_product }}{% endif %}">Anterior</a></li>
+                        {% endif %}
+                        {% if page_obj.has_next %}
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% if filter_data_inicio %}&data_inicio={{ filter_data_inicio }}{% endif %}{% if filter_data_fim %}&data_fim={{ filter_data_fim }}{% endif %}{% if filter_company %}&company={{ filter_company }}{% endif %}{% if filter_unit %}&unit={{ filter_unit }}{% endif %}{% if filter_setor %}&setor={{ filter_setor }}{% endif %}{% if filter_employee %}&employee={{ filter_employee }}{% endif %}{% if filter_product %}&product={{ filter_product }}{% endif %}">Próxima</a></li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -10,13 +10,14 @@ from django.views.decorators.http import require_http_methods
 import json
 from django.contrib import messages
 from django.utils import timezone
-from organizations.models import Unit, InventoryLocation, Function
+from organizations.models import Unit, InventoryLocation, Function, Sector
 from inventory.models import Lot, StockMovement
 from inventory.services import get_stock_balance
 from employees.models import Employee
-from .models import Product, ProductVariant, CertificadoAprovacao, PPEMatrix, PPEDelivery, ExtraordinaryPPE
+from .models import Product, ProductVariant, CertificadoAprovacao, PPEMatrix, PPEDelivery, ExtraordinaryPPE, SectorPPEMatrix
 from .services import deliver_ppe, confirm_delivery_signature, return_ppe, write_off_ppe, sync_product_variants
-from .forms import ProductForm, PPEMatrixForm, PPEMatrixBulkForm, PPEMatrixFormSet, PPEMatrixFunctionForm, PPEDeliveryForm
+from .forms import ProductForm, PPEMatrixForm, PPEMatrixBulkForm, PPEMatrixFormSet, PPEMatrixFunctionForm, PPEDeliveryForm, PPEMatrixSectorFormSet, PPEMatrixSectorChoiceForm
+
 
 class ProductListView(LoginRequiredMixin, ListView):
     model = Product
@@ -293,10 +294,6 @@ class PPEDeliveryListView(LoginRequiredMixin, ListView):
         if setor_id:
             queryset = queryset.filter(setor_id=setor_id)
 
-        funcao_id = self.request.GET.get('funcao', '').strip()
-        if funcao_id:
-            queryset = queryset.filter(funcao_id=funcao_id)
-
         status_ass = self.request.GET.get('status_assinatura', '').strip()
         if status_ass:
             queryset = queryset.filter(status_assinatura=status_ass)
@@ -312,10 +309,9 @@ class PPEDeliveryListView(LoginRequiredMixin, ListView):
         if user.is_superuser and not user_units.exists():
             user_units = Unit.objects.all()
 
-        from organizations.models import Sector, Function
+        from organizations.models import Sector
         context['products'] = Product.objects.filter(ativo=True).order_by('nome')
         context['sectors'] = Sector.objects.filter(unit__in=user_units).order_by('nome')
-        context['functions'] = Function.objects.filter(ativo=True).order_by('nome')
         context['status_choices'] = PPEDelivery.SIGN_STATUS
         
         context['filter_data_inicio'] = self.request.GET.get('data_inicio', '').strip()
@@ -323,7 +319,6 @@ class PPEDeliveryListView(LoginRequiredMixin, ListView):
         context['filter_q'] = self.request.GET.get('q', '').strip()
         context['filter_product'] = self.request.GET.get('product', '').strip()
         context['filter_setor'] = self.request.GET.get('setor', '').strip()
-        context['filter_funcao'] = self.request.GET.get('funcao', '').strip()
         context['filter_status_assinatura'] = self.request.GET.get('status_assinatura', '').strip()
         return context
 
@@ -574,6 +569,11 @@ class PPEMatrixCreateView(LoginRequiredMixin, CreateView):
         kwargs['funcao'] = self.funcao
         return kwargs
 
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        form.instance.funcao = self.funcao
+        return form
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['title'] = f"Adicionar EPI à Matriz de {self.funcao.nome}"
@@ -693,139 +693,80 @@ def ppe_matrix_toggle_active(request, pk):
     return redirect('function_detail', pk=entry.funcao.id)
 
 
-class PPEMatrixListView(LoginRequiredMixin, ListView):
-    model = Function
-    template_name = "ppe/matrix_list.html"
-    context_object_name = "functions"
-    paginate_by = 10
+class SectorPPEMatrixListView(LoginRequiredMixin, ListView):
+    model = Sector
+    template_name = "ppe/sector_matrix_list.html"
+    context_object_name = "sectors"
+    paginate_by = 15
 
     def get_queryset(self):
-        queryset = Function.objects.filter(ppe_matrix_entries__isnull=False).distinct()
-        
-        # Filtro de busca por nome da função
+        user = self.request.user
+        queryset = Sector.objects.filter(ativo=True).select_related('unit', 'unit__company', 'ppe_matrix_config', 'ppe_matrix_config__ativado_por').prefetch_related('employees')
+        if not user.is_superuser:
+            queryset = queryset.filter(unit__in=user.units.all())
+
         q = self.request.GET.get('q', '').strip()
         if q:
-            queryset = queryset.filter(nome__icontains=q)
-            
-        # Filtro por empresa
+            queryset = queryset.filter(models.Q(nome__icontains=q) | models.Q(unit__nome__icontains=q) | models.Q(unit__codigo__icontains=q))
+
         company_id = self.request.GET.get('company', '').strip()
         if company_id:
-            queryset = queryset.filter(company_id=company_id)
-            
-        # Ordenação e prefetch de EPIs ativos e inativos para listagem
-        queryset = queryset.select_related('company').prefetch_related(
-            models.Prefetch('ppe_matrix_entries', queryset=PPEMatrix.objects.all().select_related('product', 'variant'))
-        ).order_by('nome')
-        
-        return queryset
+            queryset = queryset.filter(unit__company_id=company_id)
+
+        status_filter = self.request.GET.get('status', '').strip()
+        if status_filter == 'ATIVA':
+            queryset = queryset.filter(ppe_matrix_config__status='ATIVA')
+        elif status_filter == 'EM_ELABORACAO':
+            queryset = queryset.filter(ppe_matrix_config__status='EM_ELABORACAO')
+        elif status_filter == 'SEM_CONFIGURACAO':
+            queryset = queryset.filter(ppe_matrix_config__isnull=True)
+
+        return queryset.order_by('unit__company__nome_fantasia', 'unit__codigo', 'nome')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         from organizations.models import Company
-        context['companies'] = Company.objects.filter(ativo=True).order_by('razao_social')
+        user = self.request.user
+        comp_qs = Company.objects.filter(ativo=True)
+        if not user.is_superuser:
+            comp_qs = comp_qs.filter(units__in=user.units.all()).distinct()
+        context['companies'] = comp_qs.order_by('nome_fantasia')
         context['q'] = self.request.GET.get('q', '').strip()
         context['selected_company'] = self.request.GET.get('company', '').strip()
+        context['selected_status'] = self.request.GET.get('status', '').strip()
         return context
 
 
-class PPEMatrixBulkCreateView(LoginRequiredMixin, View):
-    template_name = "ppe/matrix_bulk_form.html"
+class SectorPPEMatrixEditView(LoginRequiredMixin, View):
+    template_name = "ppe/sector_matrix_form.html"
 
     def dispatch(self, request, *args, **kwargs):
         if not (request.user.is_tecnico() or request.user.is_admin()):
             from django.core.exceptions import PermissionDenied
-            raise PermissionDenied("Apenas Técnicos SST ou Administradores podem gerenciar a matriz de EPI.")
-        return super().dispatch(request, *args, **kwargs)
-
-    def get(self, request, *args, **kwargs):
-        function_form = PPEMatrixFunctionForm(request.GET or None)
-        funcao_id = request.GET.get('funcao')
-        funcao = None
-        formset = None
-        if funcao_id:
-            funcao = Function.objects.filter(pk=funcao_id).first()
-            if funcao:
-                formset = PPEMatrixFormSet(instance=funcao, queryset=PPEMatrix.objects.filter(funcao=funcao, ativo=True))
-        
-        if not formset:
-            formset = PPEMatrixFormSet(queryset=PPEMatrix.objects.none())
-
-        return render(request, self.template_name, {
-            'title': "Nova Matriz de EPI por Função",
-            'is_create': True,
-            'function_form': function_form,
-            'formset': formset,
-            'funcao': funcao,
-        })
-
-    def post(self, request, *args, **kwargs):
-        function_form = PPEMatrixFunctionForm(request.POST)
-        funcao_id = request.POST.get('funcao')
-        funcao = get_object_or_404(Function, pk=funcao_id) if funcao_id else None
-        
-        formset = PPEMatrixFormSet(request.POST, instance=funcao) if funcao else PPEMatrixFormSet(request.POST)
-
-        if function_form.is_valid() and funcao and formset.is_valid():
-            with transaction.atomic():
-                instances = formset.save(commit=False)
-                for obj in instances:
-                    obj.funcao = funcao
-                    obj.ativo = True
-                    if not obj.criado_por_id:
-                        obj.criado_por = request.user
-                    obj.save()
-
-                for obj in formset.deleted_objects:
-                    obj.delete()
-
-                from audit.models import log_audit
-                log_audit(
-                    request=request,
-                    action=f"Criação/Atualização individual da matriz de EPI para a função: {funcao.nome}",
-                    model_name="PPEMatrix",
-                    object_id=funcao.id,
-                    before=None,
-                    after={'funcao': funcao.nome}
-                )
-
-            messages.success(request, f"Matriz da função {funcao.nome} salva com sucesso!")
-            return redirect('function_detail', pk=funcao.id)
-
-        return render(request, self.template_name, {
-            'title': "Nova Matriz de EPI por Função",
-            'is_create': True,
-            'function_form': function_form,
-            'formset': formset,
-            'funcao': funcao,
-        })
-
-
-class PPEMatrixBulkUpdateView(LoginRequiredMixin, View):
-    template_name = "ppe/matrix_bulk_form.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        if not (request.user.is_tecnico() or request.user.is_admin()):
+            raise PermissionDenied("Apenas Técnicos SST ou Administradores podem gerenciar matrizes de EPI.")
+        self.sector = get_object_or_404(Sector, pk=self.kwargs.get('sector_pk'))
+        if not request.user.is_superuser and not request.user.units.filter(id=self.sector.unit_id).exists():
             from django.core.exceptions import PermissionDenied
-            raise PermissionDenied("Apenas Técnicos SST ou Administradores podem gerenciar a matriz de EPI.")
-        self.funcao = get_object_or_404(Function, pk=self.kwargs.get('function_pk'))
+            raise PermissionDenied("Você não tem acesso à Unidade deste setor.")
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, *args, **kwargs):
-        formset = PPEMatrixFormSet(instance=self.funcao, queryset=PPEMatrix.objects.filter(funcao=self.funcao, ativo=True))
+        config, _ = SectorPPEMatrix.objects.get_or_create(sector=self.sector)
+        formset = PPEMatrixSectorFormSet(instance=self.sector, queryset=PPEMatrix.objects.filter(setor=self.sector, ativo=True))
         return render(request, self.template_name, {
-            'title': f"Editar Matriz de EPI por Função: {self.funcao.nome}",
-            'is_create': False,
-            'funcao': self.funcao,
+            'sector': self.sector,
+            'config': config,
             'formset': formset,
         })
 
     def post(self, request, *args, **kwargs):
-        formset = PPEMatrixFormSet(request.POST, instance=self.funcao)
+        config, _ = SectorPPEMatrix.objects.get_or_create(sector=self.sector)
+        formset = PPEMatrixSectorFormSet(request.POST, instance=self.sector)
         if formset.is_valid():
             with transaction.atomic():
                 instances = formset.save(commit=False)
                 for obj in instances:
-                    obj.funcao = self.funcao
+                    obj.setor = self.sector
                     obj.ativo = True
                     if not obj.criado_por_id:
                         obj.criado_por = request.user
@@ -837,65 +778,185 @@ class PPEMatrixBulkUpdateView(LoginRequiredMixin, View):
                 from audit.models import log_audit
                 log_audit(
                     request=request,
-                    action=f"Atualização individual da matriz de EPI para a função: {self.funcao.nome}",
-                    model_name="PPEMatrix",
-                    object_id=self.funcao.id,
+                    action=f"Atualização da matriz de EPI do setor: {self.sector.nome} ({self.sector.unit.codigo})",
+                    model_name="SectorPPEMatrix",
+                    object_id=self.sector.id,
                     before=None,
-                    after={'funcao': self.funcao.nome}
+                    after={'setor': self.sector.nome, 'itens_salvos': len(instances)}
                 )
 
-            messages.success(request, f"Matriz da função {self.funcao.nome} atualizada com sucesso!")
-            return redirect('function_detail', pk=self.funcao.id)
+            messages.success(request, f"Itens da matriz do setor '{self.sector.nome}' salvos com sucesso!")
+            return redirect('sector_matrix_list')
 
         return render(request, self.template_name, {
-            'title': f"Editar Matriz de EPI por Função: {self.funcao.nome}",
-            'is_create': False,
-            'funcao': self.funcao,
+            'sector': self.sector,
+            'config': config,
             'formset': formset,
         })
 
 
-class PPEMatrixBulkDeleteView(LoginRequiredMixin, View):
+class SectorPPEMatrixActivateView(LoginRequiredMixin, View):
+    def post(self, request, sector_pk):
+        if not (request.user.is_tecnico() or request.user.is_admin()):
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("Apenas Técnicos SST ou Administradores podem ativar a matriz de EPI.")
+        sector = get_object_or_404(Sector, pk=sector_pk)
+        if not request.user.is_superuser and not request.user.units.filter(id=sector.unit_id).exists():
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("Você não tem acesso à Unidade deste setor.")
+
+        # Valida se possui pelo menos 1 item ativo
+        active_items_count = PPEMatrix.objects.filter(setor=sector, ativo=True).count()
+        if active_items_count == 0:
+            messages.error(request, f"Não é possível ativar uma matriz vazia. Cadastre ao menos um EPI ativo para o setor '{sector.nome}'.")
+            return redirect('sector_matrix_edit', sector_pk=sector.pk)
+
+        config, _ = SectorPPEMatrix.objects.get_or_create(sector=sector)
+        old_status = config.status
+        config.status = 'ATIVA'
+        config.ativado_por = request.user
+        config.ativado_em = timezone.now()
+        config.save()
+
+        from audit.models import log_audit
+        log_audit(
+            request=request,
+            action=f"Ativação explícita da matriz de EPI do setor: {sector.nome} ({sector.unit.codigo})",
+            model_name="SectorPPEMatrix",
+            object_id=sector.id,
+            before={'status': old_status},
+            after={'status': 'ATIVA', 'ativado_por': request.user.username, 'itens_ativos': active_items_count}
+        )
+
+        messages.success(request, f"Matriz de EPI do setor '{sector.nome}' ATIVADA com sucesso! As entregas para este setor agora utilizam esta recomendação.")
+        return redirect('sector_matrix_list')
+
+
+class SectorPPEMatrixDeactivateView(LoginRequiredMixin, View):
+    def post(self, request, sector_pk):
+        if not (request.user.is_tecnico() or request.user.is_admin()):
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("Apenas Técnicos SST ou Administradores podem alterar o status da matriz.")
+        sector = get_object_or_404(Sector, pk=sector_pk)
+        if not request.user.is_superuser and not request.user.units.filter(id=sector.unit_id).exists():
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("Você não tem acesso à Unidade deste setor.")
+
+        config = get_object_or_404(SectorPPEMatrix, sector=sector)
+        old_status = config.status
+        config.status = 'EM_ELABORACAO'
+        config.save()
+
+        from audit.models import log_audit
+        log_audit(
+            request=request,
+            action=f"Retorno da matriz de EPI do setor para Em Elaboração: {sector.nome} ({sector.unit.codigo})",
+            model_name="SectorPPEMatrix",
+            object_id=sector.id,
+            before={'status': old_status},
+            after={'status': 'EM_ELABORACAO'}
+        )
+
+        messages.warning(request, f"Matriz do setor '{sector.nome}' retornada para 'Em Elaboração'. O setor permanecerá sem matriz ativa até nova ativação.")
+        return redirect('sector_matrix_list')
+
+
+class SectorPPEMatrixCreateView(LoginRequiredMixin, View):
+    template_name = "ppe/sector_matrix_create.html"
+
     def dispatch(self, request, *args, **kwargs):
         if not (request.user.is_tecnico() or request.user.is_admin()):
             from django.core.exceptions import PermissionDenied
-            raise PermissionDenied("Apenas Técnicos SST ou Administradores podem excluir a matriz de EPI.")
-        self.funcao = get_object_or_404(Function, pk=self.kwargs.get('function_pk'))
+            raise PermissionDenied("Apenas Técnicos SST ou Administradores podem gerenciar matrizes de EPI.")
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, *args, **kwargs):
-        entries = PPEMatrix.objects.filter(funcao=self.funcao)
-        return render(request, "ppe/matrix_confirm_delete.html", {
-            'funcao': self.funcao,
-            'entries': entries
+        sector_id = request.GET.get('setor')
+        if sector_id:
+            sector = Sector.objects.filter(pk=sector_id).first()
+            if sector:
+                if not request.user.is_superuser and not request.user.units.filter(id=sector.unit_id).exists():
+                    from django.core.exceptions import PermissionDenied
+                    raise PermissionDenied("Você não tem acesso à Unidade deste setor.")
+                if PPEMatrix.objects.filter(setor=sector, ativo=True).exists():
+                    messages.info(request, f"O setor '{sector.nome}' já possui uma Matriz de EPI cadastrada. Você foi redirecionado para a edição.")
+                    return redirect('sector_matrix_edit', sector_pk=sector.pk)
+
+        sector_form = PPEMatrixSectorChoiceForm(request.GET or None, user=request.user)
+        formset = PPEMatrixSectorFormSet(queryset=PPEMatrix.objects.none())
+        return render(request, self.template_name, {
+            'sector_form': sector_form,
+            'formset': formset,
         })
 
     def post(self, request, *args, **kwargs):
-        entries = PPEMatrix.objects.filter(funcao=self.funcao)
-        entries_info = [f"{e.product.nome} (Ativo: {e.ativo})" for e in entries]
-        
-        from django.db.models import ProtectedError
-        try:
+        sector_form = PPEMatrixSectorChoiceForm(request.POST, user=request.user)
+        if not sector_form.is_valid():
+            formset = PPEMatrixSectorFormSet(request.POST)
+            return render(request, self.template_name, {
+                'sector_form': sector_form,
+                'formset': formset,
+            })
+
+        sector = sector_form.cleaned_data['setor']
+        if not request.user.is_superuser and not request.user.units.filter(id=sector.unit_id).exists():
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("Você não tem acesso à Unidade deste setor.")
+
+        if PPEMatrix.objects.filter(setor=sector, ativo=True).exists():
+            messages.info(request, f"O setor '{sector.nome}' já possui uma Matriz de EPI cadastrada. Você foi redirecionado para a edição.")
+            return redirect('sector_matrix_edit', sector_pk=sector.pk)
+
+        formset = PPEMatrixSectorFormSet(request.POST, instance=sector)
+        if formset.is_valid():
             with transaction.atomic():
-                count = entries.count()
-                entries.delete()
-                
-                # Grava auditoria
+                config, _ = SectorPPEMatrix.objects.get_or_create(sector=sector, defaults={'status': 'EM_ELABORACAO'})
+                instances = formset.save(commit=False)
+                for obj in instances:
+                    obj.setor = sector
+                    obj.ativo = True
+                    if not obj.criado_por_id:
+                        obj.criado_por = request.user
+                    obj.save()
+
+                for obj in formset.deleted_objects:
+                    obj.delete()
+
                 from audit.models import log_audit
                 log_audit(
-                    request=self.request,
-                    action=f"Exclusão física da matriz de EPI da função: {self.funcao.nome}",
-                    model_name="PPEMatrix",
-                    object_id=self.funcao.id,
-                    before={'itens_excluidos': entries_info},
-                    after=None
+                    request=request,
+                    action=f"Criação da matriz de EPI do setor: {sector.nome} ({sector.unit.codigo})",
+                    model_name="SectorPPEMatrix",
+                    object_id=sector.id,
+                    before=None,
+                    after={'setor': sector.nome, 'itens_cadastrados': len(instances)}
                 )
-                
-            messages.success(request, f"Matriz de EPIs da função {self.funcao.nome} excluída com sucesso! ({count} registros removidos)")
-            return redirect('matrix_list')
-        except ProtectedError:
-            messages.error(request, "Não foi possível excluir a matriz porque alguns itens estão vinculados a outros registros protegidos no sistema.")
-            return redirect('function_detail', pk=self.funcao.id)
+
+            messages.success(request, f"Matriz de EPI do setor '{sector.nome}' cadastrada com sucesso! Ela foi criada em modo 'Em Elaboração'.")
+            return redirect('sector_matrix_list')
+
+        return render(request, self.template_name, {
+            'sector_form': sector_form,
+            'formset': formset,
+        })
+
+
+class LegacyMatrixRedirectView(LoginRequiredMixin, View):
+    """
+    Redireciona tentativas de acesso a URLs legadas de Matriz por Função
+    para a listagem canônica de matrizes por Setor com mensagem informativa.
+    """
+    def dispatch(self, request, *args, **kwargs):
+        messages.info(request, "A Matriz de EPI agora é gerenciada exclusivamente por Setor.")
+        return redirect('sector_matrix_list')
+
+
+# Aliases para retrocompatibilidade de imports e URLs
+SectorPPEMatrixCreateViewAlias = SectorPPEMatrixCreateView
+PPEMatrixBulkCreateView = SectorPPEMatrixCreateView
+PPEMatrixListView = LegacyMatrixRedirectView
+PPEMatrixBulkUpdateView = LegacyMatrixRedirectView
+PPEMatrixBulkDeleteView = LegacyMatrixRedirectView
 
 
 @require_http_methods(["GET"])

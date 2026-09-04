@@ -155,13 +155,65 @@ class CAEPISyncLog(models.Model):
 
 
 
+class SectorPPEMatrix(models.Model):
+    STATUS_CHOICES = (
+        ('EM_ELABORACAO', 'Em Elaboração'),
+        ('ATIVA', 'Ativa'),
+    )
+
+    sector = models.OneToOneField(
+        Sector,
+        on_delete=models.PROTECT,
+        related_name='ppe_matrix_config',
+        verbose_name="Setor"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='EM_ELABORACAO',
+        verbose_name="Status da Matriz"
+    )
+    ativado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='activated_matrices',
+        verbose_name="Ativado por"
+    )
+    ativado_em = models.DateTimeField(null=True, blank=True, verbose_name="Data/Hora de Ativação")
+    atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
+
+    class Meta:
+        verbose_name = "Configuração da Matriz do Setor"
+        verbose_name_plural = "Configurações das Matrizes dos Setores"
+
+    def __str__(self):
+        return f"Matriz do Setor {self.sector.nome} - {self.get_status_display()}"
+
+
 class PPEMatrix(models.Model):
-    funcao = models.ForeignKey(Function, on_delete=models.CASCADE, related_name='ppe_matrix_entries', verbose_name="Função/Cargo")
+    setor = models.ForeignKey(
+        Sector,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='ppe_matrix_entries',
+        verbose_name="Setor"
+    )
+    funcao = models.ForeignKey(
+        Function,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='ppe_matrix_entries',
+        verbose_name="Função/Cargo (Legado)"
+    )
     product = models.ForeignKey(Product, on_delete=models.PROTECT, verbose_name="EPI")
     variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT, blank=True, null=True, verbose_name="Variante Específica")
     
     obrigatorio = models.BooleanField(default=True, verbose_name="Obrigatório")
-    principal = models.BooleanField(default=True, verbose_name="EPI Principal da Função")
+    principal = models.BooleanField(default=True, verbose_name="EPI Principal")
     quantidade_padrao = models.IntegerField(default=1, verbose_name="Quantidade Padrão")
     vida_util_dias = models.IntegerField(verbose_name="Vida Útil Padrão (Dias)")
     
@@ -173,12 +225,39 @@ class PPEMatrix(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
 
     class Meta:
-        verbose_name = "Matriz de EPI por Função"
-        verbose_name_plural = "Matrizes de EPI por Função"
-        unique_together = ('funcao', 'product')
+        verbose_name = "Matriz de EPI"
+        verbose_name_plural = "Matrizes de EPI"
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(setor__isnull=False, funcao__isnull=True) |
+                    models.Q(setor__isnull=True, funcao__isnull=False)
+                ),
+                name="check_matrix_setor_or_funcao_exclusive"
+            ),
+            models.UniqueConstraint(
+                fields=['setor', 'product'],
+                condition=models.Q(setor__isnull=False, ativo=True),
+                name="unique_ppe_matrix_setor_product_active"
+            ),
+            models.UniqueConstraint(
+                fields=['funcao', 'product'],
+                condition=models.Q(funcao__isnull=False, ativo=True),
+                name="unique_ppe_matrix_funcao_product_active"
+            ),
+        ]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if not self.setor and not self.funcao:
+            raise ValidationError("A entrada da matriz deve estar vinculada a um Setor ou a uma Função legada.")
+        if self.setor and self.funcao:
+            raise ValidationError("A entrada da matriz não pode estar vinculada simultaneamente a um Setor e a uma Função.")
 
     def __str__(self):
-        return f"{self.product.nome} para {self.funcao.nome}"
+        if self.setor:
+            return f"{self.product.nome} para Setor {self.setor.nome}"
+        return f"{self.product.nome} para {self.funcao.nome if self.funcao else 'Função'}"
 
 
 class ExtraordinaryPPE(models.Model):
@@ -228,7 +307,7 @@ class PPEDelivery(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name='ppe_deliveries', verbose_name="Colaborador")
     
     # Snapshot funcional no momento da entrega
-    funcao = models.ForeignKey(Function, on_delete=models.PROTECT, verbose_name="Função no Momento da Entrega")
+    funcao = models.ForeignKey(Function, on_delete=models.PROTECT, blank=True, null=True, verbose_name="Função no Momento da Entrega")
     setor = models.ForeignKey(Sector, on_delete=models.PROTECT, verbose_name="Setor no Momento da Entrega")
     centro_custo = models.ForeignKey(CostCenter, on_delete=models.PROTECT, verbose_name="Centro de Custo no Momento da Entrega")
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, verbose_name="Unidade no Momento da Entrega")
@@ -245,7 +324,16 @@ class PPEDelivery(models.Model):
     vida_util_aplicada = models.IntegerField(verbose_name="Vida Útil Aplicada (Dias)")
     data_prevista_troca = models.DateField(verbose_name="Próxima Troca Prevista")
     
-    origem_necessidade = models.CharField(max_length=20, choices=(('MATRIZ', 'Matriz da Função'), ('EXTRAORDINARIA', 'EPI Extraordinário')), default='MATRIZ', verbose_name="Origem da Necessidade")
+    origem_necessidade = models.CharField(
+        max_length=20,
+        choices=(
+            ('MATRIZ', 'Matriz do Setor'),
+            ('FUNCAO_LEGADO', 'Matriz por Função (Legado)'),
+            ('EXTRAORDINARIA', 'EPI Extraordinário')
+        ),
+        default='MATRIZ',
+        verbose_name="Origem da Necessidade"
+    )
     natureza_entrega = models.CharField(max_length=30, choices=NATUREZA_CHOICES, default='INICIAL', verbose_name="Natureza da Entrega")
     motivo_substituicao = models.TextField(blank=True, null=True, verbose_name="Motivo de Substituição/Observações")
     
@@ -261,6 +349,12 @@ class PPEDelivery(models.Model):
         verbose_name = "Entrega de EPI"
         verbose_name_plural = "Entregas de EPIs"
         ordering = ['-data_entrega']
+
+    @property
+    def custo_total(self):
+        if self.custo_unitario is not None:
+            return self.custo_unitario * self.quantidade
+        return None
 
     def __str__(self):
         return f"Entrega {self.product_variant.product.nome} para {self.employee.nome_completo} em {self.data_entrega.strftime('%d/%m/%Y')}"

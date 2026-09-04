@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}Parametrizar Matriz do Setor: {{ sector.nome }} - SST Freedom{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="{% url 'sector_matrix_list' %}" class="text-primary text-decoration-none">Matrizes por Setor</a></li>
+<li class="breadcrumb-item active text-secondary" aria-current="page">{{ sector.nome }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-xl-11">
+        <div class="card-premium card-primary">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 border-bottom pb-3" style="border-color: var(--border-default) !important;">
+                <div>
+                    <h3 class="mb-1 text-primary"><i class="bi bi-diagram-3-fill me-2"></i> Matriz de EPI: {{ sector.nome }}</h3>
+                    <p class="text-secondary small mb-0">
+                        Unidade: <strong>{{ sector.unit.codigo }} - {{ sector.unit.nome }}</strong> | 
+                        Empresa: <strong>{{ sector.unit.company.nome_fantasia }}</strong>
+                    </p>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted small me-1">Status Atual:</span>
+                    {% if config.status == 'ATIVA' %}
+                    <span class="badge bg-success p-2">
+                        <i class="bi bi-check-circle-fill me-1"></i> Ativa
+                    </span>
+                    {% else %}
+                    <span class="badge bg-warning text-dark p-2">
+                        <i class="bi bi-cone-striped me-1"></i> Em Elaboração
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <form method="post" id="sectorMatrixForm">
+                {% csrf_token %}
+
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h5 class="text-light mb-1"><i class="bi bi-shield-check me-2 text-info"></i> EPIs Recomendados para o Setor</h5>
+                        <p class="text-secondary small mb-0">Defina os equipamentos obrigatórios, vida útil em dias e relevância para os colaboradores lotados neste setor.</p>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-success btn-premium" id="add-row-btn">
+                        <i class="bi bi-plus-circle me-1"></i> Adicionar EPI
+                    </button>
+                </div>
+
+                {{ formset.management_form }}
+                
+                {% if formset.non_form_errors %}
+                <div class="alert alert-danger alert-dismissible fade show my-3" role="alert">
+                    {% for error in formset.non_form_errors %}{{ error }}{% endfor %}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endif %}
+
+                <div class="table-responsive mb-4">
+                    <table class="table table-premium align-middle mb-0" id="matrix-table">
+                        <thead>
+                            <tr>
+                                <th style="min-width: 260px;" class="text-muted border-0">EPI</th>
+                                <th style="width: 140px;" class="text-muted border-0 text-center">Qtd. Padrão</th>
+                                <th style="width: 180px;" class="text-muted border-0 text-center">Vida Útil (dias)</th>
+                                <th style="width: 120px;" class="text-muted border-0 text-center">Obrigatório</th>
+                                <th style="width: 130px;" class="text-muted border-0 text-center">EPI Principal</th>
+                                <th style="width: 80px;" class="text-muted border-0 text-center">Remover</th>
+                            </tr>
+                        </thead>
+                        <tbody id="formset-container">
+                            {% for form in formset.forms %}
+                            <tr class="formset-row">
+                                {{ form.id }}
+                                <td>
+                                    {{ form.product }}
+                                    {% if form.product.errors %}
+                                    <div class="invalid-feedback d-block text-danger small mt-1">
+                                        {% for error in form.product.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {{ form.quantidade_padrao }}
+                                    {% if form.quantidade_padrao.errors %}
+                                    <div class="invalid-feedback d-block text-danger small mt-1">
+                                        {% for error in form.quantidade_padrao.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {{ form.vida_util_dias }}
+                                    {% if form.vida_util_dias.errors %}
+                                    <div class="invalid-feedback d-block text-danger small mt-1">
+                                        {% for error in form.vida_util_dias.errors %}{{ error }}{% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <div class="form-check d-inline-block">
+                                        {{ form.obrigatorio }}
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <div class="form-check d-inline-block">
+                                        {{ form.principal }}
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <div class="d-none">{{ form.DELETE }}</div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn" title="Remover item">
+                                        <i class="bi bi-trash-fill"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center pt-3 border-top" style="border-color: var(--border-default) !important;">
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-premium btn-premium-primary px-4">
+                            <i class="bi bi-check-lg me-2"></i> Salvar Itens da Matriz
+                        </button>
+                        <a href="{% url 'sector_matrix_list' %}" class="btn btn-outline-secondary btn-premium px-4">
+                            Voltar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const addBtn = document.getElementById('add-row-btn');
+    const container = document.getElementById('formset-container');
+    const totalFormsInput = document.getElementById('id_ppe_matrix_entries-TOTAL_FORMS');
+
+    if (!container || !totalFormsInput) return;
+
+    function attachRemoveEvents() {
+        document.querySelectorAll('.remove-row-btn').forEach(btn => {
+            btn.onclick = function() {
+                const row = this.closest('tr');
+                const deleteInput = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+                if (deleteInput) {
+                    deleteInput.checked = true;
+                    row.style.display = 'none';
+                } else {
+                    row.remove();
+                }
+            };
+        });
+    }
+    attachRemoveEvents();
+
+    if (addBtn) {
+        addBtn.addEventListener('click', function() {
+            const formCount = parseInt(totalFormsInput.value);
+            const rows = container.querySelectorAll('.formset-row');
+            if (rows.length === 0) return;
+
+            // Clona a primeira linha
+            const templateRow = rows[0].cloneNode(true);
+            templateRow.style.display = '';
+
+            // Limpa erros e inputs
+            templateRow.querySelectorAll('.invalid-feedback').forEach(el => el.remove());
+            templateRow.querySelectorAll('input, select').forEach(input => {
+                const name = input.getAttribute('name');
+                if (name) {
+                    const newName = name.replace(/-\d+-/, `-${formCount}-`);
+                    input.setAttribute('name', newName);
+                    input.setAttribute('id', `id_${newName}`);
+                }
+                if (input.type === 'checkbox') {
+                    if (input.name.endsWith('-DELETE')) {
+                        input.checked = false;
+                    } else if (input.name.endsWith('-obrigatorio') || input.name.endsWith('-principal')) {
+                        input.checked = true;
+                    }
+                } else if (input.type === 'number') {
+                    input.value = '365';
+                } else if (input.tagName === 'SELECT') {
+                    input.selectedIndex = 0;
+                } else if (input.type === 'hidden') {
+                    input.value = '';
+                }
+            });
+
+            container.appendChild(templateRow);
+            totalFormsInput.value = formCount + 1;
+            attachRemoveEvents();
+        });
+    }
+});
+</script>
+{% endblock %}

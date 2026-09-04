@@ -1,6 +1,6 @@
 from django import forms
-from .models import Product, PPEMatrix, ProductVariant, PPEDelivery
-from organizations.models import Function
+from .models import Product, PPEMatrix, ProductVariant, PPEDelivery, SectorPPEMatrix
+from organizations.models import Function, Sector
 
 class ProductForm(forms.ModelForm):
     tamanhos_str = forms.CharField(
@@ -89,6 +89,7 @@ class PPEMatrixForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.funcao = kwargs.pop('funcao', None)
+        self.setor = kwargs.pop('setor', None)
         super().__init__(*args, **kwargs)
         # Filtra apenas produtos do tipo EPI e que estão ativos
         self.fields['product'].queryset = Product.objects.filter(tipo_produto='EPI', ativo=True).order_by('nome')
@@ -105,9 +106,17 @@ class PPEMatrixForm(forms.ModelForm):
         if variant and product and variant.product != product:
             self.add_error('variant', "A variante/tamanho selecionada não pertence ao EPI escolhido.")
 
-        # Valida restrição de unicidade (funcao + product) para evitar IntegrityError
+        # Valida restrição de unicidade para setor
+        if self.setor and product:
+            exists_query = PPEMatrix.objects.filter(setor=self.setor, product=product, ativo=True)
+            if self.instance and self.instance.pk:
+                exists_query = exists_query.exclude(pk=self.instance.pk)
+            if exists_query.exists():
+                self.add_error('product', f"Este EPI já está cadastrado na matriz de recomendação do setor {self.setor.nome}.")
+
+        # Valida restrição de unicidade para funcao
         if self.funcao and product:
-            exists_query = PPEMatrix.objects.filter(funcao=self.funcao, product=product)
+            exists_query = PPEMatrix.objects.filter(funcao=self.funcao, product=product, ativo=True)
             if self.instance and self.instance.pk:
                 exists_query = exists_query.exclude(pk=self.instance.pk)
             if exists_query.exists():
@@ -119,27 +128,36 @@ class PPEMatrixForm(forms.ModelForm):
 class PPEMatrixItemForm(forms.ModelForm):
     class Meta:
         model = PPEMatrix
-        fields = ['product', 'vida_util_dias', 'obrigatorio', 'principal']
+        fields = ['product', 'quantidade_padrao', 'vida_util_dias', 'obrigatorio', 'principal']
         widgets = {
             'product': forms.Select(attrs={'class': 'form-select form-control-premium ppe-product-select'}),
+            'quantidade_padrao': forms.NumberInput(attrs={'class': 'form-control form-control-premium', 'min': '1', 'placeholder': 'Qtd'}),
             'vida_util_dias': forms.NumberInput(attrs={'class': 'form-control form-control-premium', 'min': '1', 'placeholder': 'Dias'}),
             'obrigatorio': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'principal': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
         labels = {
             'product': 'EPI',
+            'quantidade_padrao': 'Quantidade Padrão',
             'vida_util_dias': 'Vida útil estimada (dias)',
             'obrigatorio': 'Obrigatório',
-            'principal': 'EPI principal da função',
+            'principal': 'EPI Principal',
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['product'].queryset = Product.objects.filter(tipo_produto='EPI', ativo=True).order_by('nome')
         if not self.instance or not self.instance.pk:
+            self.fields['quantidade_padrao'].initial = 1
             self.fields['vida_util_dias'].initial = 365
             self.fields['obrigatorio'].initial = True
             self.fields['principal'].initial = True
+
+    def clean_quantidade_padrao(self):
+        qtd = self.cleaned_data.get('quantidade_padrao')
+        if qtd is None or qtd <= 0:
+            raise forms.ValidationError("A quantidade padrão deve ser um número inteiro positivo maior que zero.")
+        return qtd
 
     def clean_vida_util_dias(self):
         vud = self.cleaned_data.get('vida_util_dias')
@@ -174,9 +192,57 @@ PPEMatrixFormSet = forms.inlineformset_factory(
     PPEMatrix,
     form=PPEMatrixItemForm,
     formset=BasePPEMatrixFormSet,
+    fk_name='funcao',
     extra=1,
     can_delete=True
 )
+
+
+class BasePPEMatrixSectorFormSet(forms.BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        
+        products_seen = set()
+        active_count = 0
+        for form in self.forms:
+            if form.cleaned_data and not form.cleaned_data.get('DELETE', False):
+                product = form.cleaned_data.get('product')
+                if product:
+                    active_count += 1
+                    if product.id in products_seen:
+                        form.add_error('product', f"O EPI '{product.nome}' foi incluído mais de uma vez neste setor.")
+                    else:
+                        products_seen.add(product.id)
+        if active_count == 0:
+            raise forms.ValidationError("Adicione pelo menos um EPI recomendado para a matriz do setor.")
+
+
+PPEMatrixSectorFormSet = forms.inlineformset_factory(
+    Sector,
+    PPEMatrix,
+    form=PPEMatrixItemForm,
+    formset=BasePPEMatrixSectorFormSet,
+    fk_name='setor',
+    extra=1,
+    can_delete=True
+)
+
+
+class PPEMatrixSectorChoiceForm(forms.Form):
+    setor = forms.ModelChoiceField(
+        queryset=None,
+        label="Setor",
+        widget=forms.Select(attrs={'class': 'form-select form-control-premium'})
+    )
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        qs = Sector.objects.filter(ativo=True).select_related('unit', 'unit__company').order_by('unit__company__nome_fantasia', 'unit__codigo', 'nome')
+        if user and not user.is_superuser:
+            qs = qs.filter(unit__in=user.units.all())
+        self.fields['setor'].queryset = qs
 
 
 class PPEMatrixFunctionForm(forms.Form):
@@ -190,6 +256,7 @@ class PPEMatrixFunctionForm(forms.Form):
         super().__init__(*args, **kwargs)
         from organizations.models import Function
         self.fields['funcao'].queryset = Function.objects.filter(ativo=True).order_by('nome')
+
 
 
 class PPEMatrixBulkForm(forms.Form):

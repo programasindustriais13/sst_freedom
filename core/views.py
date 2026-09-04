@@ -296,10 +296,6 @@ class ReportPPEDeliveriesView(LoginRequiredMixin, ListView):
         if setor_id:
             queryset = queryset.filter(setor_id=setor_id)
 
-        funcao_id = self.request.GET.get('funcao', '').strip()
-        if funcao_id:
-            queryset = queryset.filter(funcao_id=funcao_id)
-
         unit_id = self.request.GET.get('unit', '').strip()
         if unit_id:
             queryset = queryset.filter(unit_id=unit_id)
@@ -321,11 +317,10 @@ class ReportPPEDeliveriesView(LoginRequiredMixin, ListView):
             user_units = Unit.objects.all()
 
         from ppe.models import Product
-        from organizations.models import Sector, Function
+        from organizations.models import Sector
         context.update({
             'products': Product.objects.filter(ativo=True).order_by('nome'),
             'sectors': Sector.objects.filter(unit__in=user_units).order_by('nome'),
-            'functions': Function.objects.filter(ativo=True).order_by('nome'),
             'units': user_units,
             'status_choices': PPEDelivery.SIGN_STATUS,
             'filter_data_inicio': self.request.GET.get('data_inicio', '').strip(),
@@ -333,7 +328,6 @@ class ReportPPEDeliveriesView(LoginRequiredMixin, ListView):
             'filter_q': self.request.GET.get('q', '').strip(),
             'filter_product': self.request.GET.get('product', '').strip(),
             'filter_setor': self.request.GET.get('setor', '').strip(),
-            'filter_funcao': self.request.GET.get('funcao', '').strip(),
             'filter_unit': self.request.GET.get('unit', '').strip(),
             'filter_status_assinatura': self.request.GET.get('status_assinatura', '').strip(),
         })
@@ -399,4 +393,201 @@ class ReportCAValidityView(LoginRequiredMixin, ListView):
             'filter_data_fim': self.request.GET.get('data_fim', '').strip(),
         })
         return context
+
+
+class ReportPPEConsumptionCostView(LoginRequiredMixin, ListView):
+    model = PPEDelivery
+    template_name = "reports/ppe_consumption_cost.html"
+    context_object_name = "deliveries"
+    paginate_by = 30
+
+    def get_queryset(self):
+        user = self.request.user
+        user_units = user.units.all()
+        if user.is_superuser and not user_units.exists():
+            from organizations.models import Unit
+            user_units = Unit.objects.all()
+
+        queryset = PPEDelivery.objects.filter(
+            unit__in=user_units
+        ).exclude(
+            status_assinatura='REJEITADO'
+        ).select_related(
+            'employee', 'setor', 'unit', 'unit__company', 'product_variant__product', 'lot', 'ca_entregue'
+        )
+
+        data_inicio = self.request.GET.get('data_inicio', '').strip()
+        if data_inicio:
+            queryset = queryset.filter(data_entrega__gte=data_inicio)
+
+        data_fim = self.request.GET.get('data_fim', '').strip()
+        if data_fim:
+            queryset = queryset.filter(data_entrega__lte=data_fim)
+
+        company_id = self.request.GET.get('company', '').strip()
+        if company_id:
+            queryset = queryset.filter(unit__company_id=company_id)
+
+        unit_id = self.request.GET.get('unit', '').strip()
+        if unit_id:
+            queryset = queryset.filter(unit_id=unit_id)
+
+        setor_id = self.request.GET.get('setor', '').strip()
+        if setor_id:
+            queryset = queryset.filter(setor_id=setor_id)
+
+        employee_q = self.request.GET.get('employee', '').strip()
+        if employee_q:
+            clean_digits = "".join([c for c in employee_q if c.isdigit()])
+            queryset = queryset.filter(
+                models.Q(employee__nome_completo__icontains=employee_q) |
+                models.Q(employee__matricula__icontains=employee_q) |
+                models.Q(employee__cpf__icontains=clean_digits or employee_q)
+            )
+
+        product_id = self.request.GET.get('product', '').strip()
+        if product_id:
+            queryset = queryset.filter(product_variant__product_id=product_id)
+
+        natureza = self.request.GET.get('natureza_entrega', '').strip()
+        if natureza:
+            queryset = queryset.filter(natureza_entrega=natureza)
+
+        return queryset.order_by('-data_entrega', 'setor__nome', 'employee__nome_completo')
+
+    def get_context_data(self, **kwargs):
+        if not hasattr(self, 'object_list'):
+            self.object_list = self.get_queryset()
+        context = super().get_context_data(**kwargs)
+        from decimal import Decimal
+        
+        # O queryset completo (sem paginação da tabela) para agregação de custos e totais
+        all_deliveries = self.get_queryset()
+
+        total_pecas = 0
+        total_custo = Decimal('0.00')
+        itens_sem_custo = 0
+        setores_ids = set()
+        colaboradores_ids = set()
+
+        setores_data = {}
+        colaboradores_data = {}
+
+        for d in all_deliveries:
+            total_pecas += d.quantidade
+            setor_key = d.setor_id
+            emp_key = (d.setor_id, d.employee_id)
+
+            setores_ids.add(d.setor_id)
+            colaboradores_ids.add(d.employee_id)
+
+            has_cost = False
+            item_cost = Decimal('0.00')
+            if d.custo_unitario is not None:
+                has_cost = True
+                item_cost = Decimal(str(d.quantidade)) * d.custo_unitario
+                total_custo += item_cost
+            else:
+                itens_sem_custo += 1
+
+            # Agrupamento Setor
+            if setor_key not in setores_data:
+                setores_data[setor_key] = {
+                    'setor': d.setor,
+                    'total_pecas': 0,
+                    'total_custo': Decimal('0.00'),
+                    'itens_sem_custo': 0,
+                    'colaboradores': set(),
+                    'entregas_count': 0,
+                }
+            s_entry = setores_data[setor_key]
+            s_entry['total_pecas'] += d.quantidade
+            s_entry['entregas_count'] += 1
+            s_entry['colaboradores'].add(d.employee_id)
+            if has_cost:
+                s_entry['total_custo'] += item_cost
+            else:
+                s_entry['itens_sem_custo'] += 1
+
+            # Agrupamento Colaborador dentro do Setor histórico
+            if emp_key not in colaboradores_data:
+                colaboradores_data[emp_key] = {
+                    'employee': d.employee,
+                    'setor': d.setor,
+                    'total_pecas': 0,
+                    'total_custo': Decimal('0.00'),
+                    'itens_sem_custo': 0,
+                    'entregas_count': 0,
+                }
+            c_entry = colaboradores_data[emp_key]
+            c_entry['total_pecas'] += d.quantidade
+            c_entry['entregas_count'] += 1
+            if has_cost:
+                c_entry['total_custo'] += item_cost
+            else:
+                c_entry['itens_sem_custo'] += 1
+
+        # Listas ordenadas decrescentes por custo
+        resumo_setores = []
+        for s_id, data in setores_data.items():
+            resumo_setores.append({
+                'setor': data['setor'],
+                'total_colaboradores': len(data['colaboradores']),
+                'entregas_count': data['entregas_count'],
+                'total_pecas': data['total_pecas'],
+                'total_custo': data['total_custo'],
+                'itens_sem_custo': data['itens_sem_custo'],
+            })
+        resumo_setores.sort(key=lambda x: x['total_custo'], reverse=True)
+
+        resumo_colaboradores = []
+        for (s_id, e_id), data in colaboradores_data.items():
+            resumo_colaboradores.append({
+                'employee': data['employee'],
+                'setor': data['setor'],
+                'entregas_count': data['entregas_count'],
+                'total_pecas': data['total_pecas'],
+                'total_custo': data['total_custo'],
+                'itens_sem_custo': data['itens_sem_custo'],
+            })
+        resumo_colaboradores.sort(key=lambda x: x['total_custo'], reverse=True)
+
+        user = self.request.user
+        user_units = user.units.all()
+        if user.is_superuser and not user_units.exists():
+            from organizations.models import Unit
+            user_units = Unit.objects.all()
+
+        from organizations.models import Company, Sector
+        from ppe.models import Product
+
+        comp_qs = Company.objects.filter(ativo=True)
+        if not user.is_superuser:
+            comp_qs = comp_qs.filter(units__in=user_units).distinct()
+
+        context.update({
+            'total_entregas': all_deliveries.count(),
+            'total_pecas': total_pecas,
+            'total_custo': total_custo,
+            'total_setores': len(setores_ids),
+            'total_colaboradores': len(colaboradores_ids),
+            'itens_sem_custo': itens_sem_custo,
+            'resumo_setores': resumo_setores,
+            'resumo_colaboradores': resumo_colaboradores,
+            'companies': comp_qs.order_by('nome_fantasia'),
+            'units': user_units.order_by('codigo'),
+            'sectors': Sector.objects.filter(unit__in=user_units, ativo=True).order_by('nome'),
+            'products': Product.objects.filter(ativo=True).order_by('nome'),
+            'naturezas': PPEDelivery.NATUREZA_CHOICES,
+            'filter_data_inicio': self.request.GET.get('data_inicio', '').strip(),
+            'filter_data_fim': self.request.GET.get('data_fim', '').strip(),
+            'filter_company': self.request.GET.get('company', '').strip(),
+            'filter_unit': self.request.GET.get('unit', '').strip(),
+            'filter_setor': self.request.GET.get('setor', '').strip(),
+            'filter_employee': self.request.GET.get('employee', '').strip(),
+            'filter_product': self.request.GET.get('product', '').strip(),
+            'filter_natureza': self.request.GET.get('natureza_entrega', '').strip(),
+        })
+        return context
+
 

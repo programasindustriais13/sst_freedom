@@ -1,3 +1,4 @@
+import logging
 import hashlib
 from datetime import timedelta
 from django.db import transaction
@@ -6,14 +7,39 @@ from django.core.exceptions import ValidationError
 from inventory.services import get_stock_balance, InsufficientStockError
 from inventory.models import StockMovement, Lot
 from organizations.models import InventoryLocation
-from .models import PPEDelivery, PPEMatrix, ExtraordinaryPPE, CertificadoAprovacao
+from .models import PPEDelivery, PPEMatrix, ExtraordinaryPPE, CertificadoAprovacao, SectorPPEMatrix
+
+logger = logging.getLogger(__name__)
+
+
+def resolve_employee_ppe_matrix(employee):
+    """
+    Resolve a matriz de EPI recomendada para o colaborador conforme a Emenda Constitucional nº 02/2026:
+    1. A Matriz de EPI operacional vincula-se exclusivamente ao Setor.
+    2. Se o Setor possui configuração SectorPPEMatrix com status 'ATIVA', retorna (queryset_setor, 'SETOR').
+    3. Se o Setor não possui matriz ativa, retorna (queryset_vazio, None).
+       Estado de domínio: 'Setor sem Matriz de EPI ativa.'
+    4. Não há fallback operacional para Função, não há consulta a employee.funcao_id,
+       não há retorno de FUNCAO_LEGADO e não há warning de fallback.
+    """
+    if not employee or not employee.setor_id:
+        return PPEMatrix.objects.none(), None
+
+    # Verifica matriz ativa do Setor
+    sector_cfg = SectorPPEMatrix.objects.filter(sector_id=employee.setor_id, status='ATIVA').first()
+    if sector_cfg:
+        qs = PPEMatrix.objects.filter(setor_id=employee.setor_id, ativo=True).select_related('product')
+        return qs, 'SETOR'
+
+    return PPEMatrix.objects.none(), None
+
 
 @transaction.atomic
 def deliver_ppe(employee, product_variant, lot, quantity, user, data_entrega, natureza_entrega, motivo_substituicao=None, manual_vida_util=None):
     """
     Registra o fornecimento individual de um EPI ao colaborador.
     Debita o estoque no local SST da unidade do colaborador.
-    Calcula a próxima troca preventiva com base na matriz ou exceções extraordinárias.
+    Calcula a próxima troca preventiva com base na matriz do setor ou exceções extraordinárias.
     """
     # 1. Valida se a variante pertence ao lote informado
     if lot:
@@ -47,21 +73,20 @@ def deliver_ppe(employee, product_variant, lot, quantity, user, data_entrega, na
         origem_necessidade = 'EXTRAORDINARIA'
         vida_util = ext_ppe.vida_util_dias
     else:
-        # Busca na matriz por função
-        matrix_entry = PPEMatrix.objects.filter(
-            funcao=employee.funcao,
-            product=product_variant.product,
-            ativo=True
-        ).first()
+        # Busca na matriz recomendada exclusivamente por Setor
+        matrix_qs, origin = resolve_employee_ppe_matrix(employee)
+        matrix_entry = matrix_qs.filter(product=product_variant.product).first()
         if matrix_entry:
             vida_util = matrix_entry.vida_util_dias
+            origem_necessidade = 'MATRIZ'
         elif manual_vida_util is not None:
             vida_util = manual_vida_util
             origem_necessidade = 'EXTRAORDINARIA'
         else:
-            # Se não está na matriz e não há manual_vida_util, exige justificativa
+            # Se não está na matriz e não há manual_vida_util, exige justificativa formal
             if not motivo_substituicao:
-                raise ValidationError("Justificativa obrigatória para fornecimento de item fora da matriz da função.")
+                raise ValidationError("Justificativa obrigatória para fornecimento de item fora da matriz de EPI.")
+            origem_necessidade = 'EXTRAORDINARIA'
 
     # Próxima troca
     data_prevista_troca = data_entrega + timedelta(days=vida_util)

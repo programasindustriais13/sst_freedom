@@ -38,8 +38,8 @@
             <a class="nav-link-premium {% if 'ppe' in request.path and 'deliver' not in request.path and 'matrices' not in request.path and 'matrix' not in request.path %}active{% endif %}" href="{% url 'product_list' %}">
                 <i class="bi bi-shield-shaded"></i> EPIs / Catálogo
             </a>
-            <a class="nav-link-premium {% if 'matrices' in request.path or 'matrix' in request.path %}active{% endif %}" href="{% url 'matrix_list' %}">
-                <i class="bi bi-shield-check"></i> Matriz de EPI por Função
+            <a class="nav-link-premium {% if 'matrices' in request.path or 'matrix' in request.path %}active{% endif %}" href="{% url 'sector_matrix_list' %}">
+                <i class="bi bi-diagram-3-fill"></i> Matriz de EPI por Setor
             </a>
             {% endif %}
 

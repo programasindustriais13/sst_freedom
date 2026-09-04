@@ -236,9 +236,9 @@ class AdminCascadeDeleteTestCase(TestCase):
         
         # Should show standard Django admin page showing protection and blocking deletion
         self.assertEqual(response.status_code, 200)
-        # Standard Django delete view contains a message showing what cannot be deleted
-        self.assertIn("Não é possível remover", response.content.decode("utf-8"))
-        self.assertNotIn("Para confirmar a exclusão, digite a palavra de confirmação", response.content.decode("utf-8"))
+        content = response.content.decode("utf-8")
+        self.assertTrue("Não é possível remover" in content or "Não é possível excluir" in content)
+        self.assertNotIn("Para confirmar a exclusão, digite a palavra de confirmação", content)
 
     def test_admin_delete_view_post_correct_confirmation(self):
         self.client.force_login(self.authorized_user)
