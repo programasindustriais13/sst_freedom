@@ -438,16 +438,33 @@ class ReportPPEConsumptionCostView(LoginRequiredMixin, ListView):
 
         employee_q = self.request.GET.get('employee', '').strip()
         if employee_q:
-            clean_digits = "".join([c for c in employee_q if c.isdigit()])
-            queryset = queryset.filter(
-                models.Q(employee__nome_completo__icontains=employee_q) |
-                models.Q(employee__matricula__icontains=employee_q) |
-                models.Q(employee__cpf__icontains=clean_digits or employee_q)
-            )
+            if employee_q.isdigit():
+                from employees.models import Employee
+                emp_obj = Employee.objects.filter(id=int(employee_q)).first()
+                if emp_obj:
+                    queryset = queryset.filter(employee_id=emp_obj.id)
+                else:
+                    queryset = queryset.filter(
+                        models.Q(employee__matricula__icontains=employee_q) |
+                        models.Q(employee__cpf__icontains=employee_q)
+                    )
+            else:
+                clean_digits = "".join([c for c in employee_q if c.isdigit()])
+                queryset = queryset.filter(
+                    models.Q(employee__nome_completo__icontains=employee_q) |
+                    models.Q(employee__matricula__icontains=employee_q) |
+                    models.Q(employee__cpf__icontains=clean_digits or employee_q)
+                )
 
         product_id = self.request.GET.get('product', '').strip()
         if product_id:
-            queryset = queryset.filter(product_variant__product_id=product_id)
+            if product_id.isdigit():
+                queryset = queryset.filter(product_variant__product_id=int(product_id))
+            else:
+                queryset = queryset.filter(
+                    models.Q(product_variant__product__nome__icontains=product_id) |
+                    models.Q(product_variant__product__ca_numero__icontains=product_id)
+                )
 
         natureza = self.request.GET.get('natureza_entrega', '').strip()
         if natureza:
@@ -565,6 +582,29 @@ class ReportPPEConsumptionCostView(LoginRequiredMixin, ListView):
         if not user.is_superuser:
             comp_qs = comp_qs.filter(units__in=user_units).distinct()
 
+        selected_employee = None
+        filter_employee = self.request.GET.get('employee', '').strip()
+        if filter_employee:
+            from employees.models import Employee
+            if filter_employee.isdigit():
+                selected_employee = Employee.objects.filter(id=int(filter_employee)).select_related('setor').first()
+            if not selected_employee:
+                selected_employee = Employee.objects.filter(
+                    models.Q(nome_completo__iexact=filter_employee) |
+                    models.Q(matricula__iexact=filter_employee)
+                ).select_related('setor').first()
+
+        selected_product = None
+        filter_product = self.request.GET.get('product', '').strip()
+        if filter_product:
+            if filter_product.isdigit():
+                selected_product = Product.objects.filter(id=int(filter_product)).first()
+            else:
+                selected_product = Product.objects.filter(
+                    models.Q(nome__iexact=filter_product) |
+                    models.Q(ca_numero__iexact=filter_product)
+                ).first()
+
         context.update({
             'total_entregas': all_deliveries.count(),
             'total_pecas': total_pecas,
@@ -579,6 +619,8 @@ class ReportPPEConsumptionCostView(LoginRequiredMixin, ListView):
             'sectors': Sector.objects.filter(unit__in=user_units, ativo=True).order_by('nome'),
             'products': Product.objects.filter(ativo=True).order_by('nome'),
             'naturezas': PPEDelivery.NATUREZA_CHOICES,
+            'selected_employee': selected_employee,
+            'selected_product': selected_product,
             'filter_data_inicio': self.request.GET.get('data_inicio', '').strip(),
             'filter_data_fim': self.request.GET.get('data_fim', '').strip(),
             'filter_company': self.request.GET.get('company', '').strip(),

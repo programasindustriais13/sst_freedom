@@ -259,23 +259,73 @@ def write_off_ppe(unit, location, product_variant, lot, quantity, reason, user, 
     )
 
 
-def normalize_size_string(tamanhos_str):
+import re
+import unicodedata
+
+def canonical_size_key(tamanho: str) -> str:
     """
-    Normaliza a string de tamanhos/variantes separada por vírgula.
-    Remove espaços extras, ignora itens vazios e elimina duplicidades de forma insensível a maiúsculas/minúsculas,
-    preservando a primeira representação visual.
-    Exemplo: "P, M, G, m, GG, , P" -> ["P", "M", "G", "GG"]
+    Gera a chave normalizada persistente da variante:
+    - Normalização Unicode NFKC
+    - Remoção de espaços iniciais, finais e repetidos
+    - Conversão para maiúsculo
+    - 'ÚNICO', 'UNICO', 'U' mapeados para 'U'
     """
-    if not tamanhos_str:
+    if not tamanho:
+        return 'U'
+    norm = unicodedata.normalize('NFKC', str(tamanho)).strip().upper()
+    norm = re.sub(r'\s+', ' ', norm)
+    if norm in ('UNICO', 'ÚNICO', 'U'):
+        return 'U'
+    return norm
+
+
+def normalize_size_label(tamanho: str) -> str:
+    """
+    Retorna o rótulo canônico amigável de exibição:
+    - Siglas usuais padronizadas: PP, P, M, G, GG, XG, XXG, U
+    - Numéricos preservados: 38, 39, 40
+    - Textos livres limpos de espaços extras
+    """
+    key = canonical_size_key(tamanho)
+    standard_labels = {
+        'U': 'U',
+        'PP': 'PP',
+        'P': 'P',
+        'M': 'M',
+        'G': 'G',
+        'GG': 'GG',
+        'XG': 'XG',
+        'XXG': 'XXG'
+    }
+    return standard_labels.get(key, key)
+
+
+def normalize_size_string(tamanhos_input):
+    """
+    Normaliza a lista ou string de tamanhos/variantes separada por vírgula.
+    Remove espaços extras, ignora itens vazios e elimina duplicidades usando canonical_size_key,
+    preservando rótulos canônicos limpos e ordenação lógica conforme catálogo canônico.
+    Exemplo: "P, M, G, g, G, , U, Único" -> ["U", "P", "M", "G"]
+    """
+    if not tamanhos_input:
         return []
-    items = [t.strip() for t in str(tamanhos_str).split(',') if t.strip()]
-    seen_lower = set()
+
+    from ppe.constants import get_size_sort_key
+
+    if isinstance(tamanhos_input, (list, tuple, set)):
+        items = [str(t).strip() for t in tamanhos_input if str(t).strip()]
+    else:
+        items = [t.strip() for t in str(tamanhos_input).split(',') if t.strip()]
+
+    seen_keys = set()
     result = []
     for item in items:
-        key = item.lower()
-        if key not in seen_lower:
-            seen_lower.add(key)
-            result.append(item)
+        key = canonical_size_key(item)
+        if key not in seen_keys:
+            seen_keys.add(key)
+            result.append(normalize_size_label(item))
+
+    result.sort(key=get_size_sort_key)
     return result
 
 
@@ -309,7 +359,7 @@ def variant_has_history_or_stock(variant):
     if LocationStockMinimo.objects.filter(product_variant=variant).exists():
         return True
 
-    # Check matrizes por função
+    # Check matrizes por função ou setor
     if PPEMatrix.objects.filter(variant=variant).exists():
         return True
 
@@ -328,7 +378,7 @@ def variant_has_history_or_stock(variant):
 def sync_product_variants(product, tamanhos_str):
     """
     Normaliza e sincroniza as variantes de um EPI a partir da string enviada no formulário.
-    - Reutiliza variantes existentes.
+    - Reutiliza variantes existentes com base na chave normalizada canônica.
     - Cria variantes verdadeiramente novas.
     - Preserva SKU, estoque mínimo e demais atributos de variantes existentes.
     - Impede desativação/exclusão de variantes que possuem saldo ou histórico, retornando avisos.
@@ -341,34 +391,48 @@ def sync_product_variants(product, tamanhos_str):
         tamanhos_list = ['U']
 
     existing_variants = list(product.variants.all())
-    existing_by_lower = {v.tamanho.lower(): v for v in existing_variants}
+    existing_by_key = {canonical_size_key(v.tamanho): v for v in existing_variants}
 
     updated_variants = []
     warning_messages = []
 
-    requested_sizes_lower = {t.lower(): t for t in tamanhos_list}
+    requested_keys = {canonical_size_key(t): t for t in tamanhos_list}
 
     # 1. Processa tamanhos solicitados: reutiliza ou cria
     for size in tamanhos_list:
-        size_lower = size.lower()
-        if size_lower in existing_by_lower:
-            variant = existing_by_lower[size_lower]
+        key = canonical_size_key(size)
+        label = normalize_size_label(size)
+        if key in existing_by_key:
+            variant = existing_by_key[key]
+            changed = False
+            if variant.tamanho != label:
+                variant.tamanho = label
+                changed = True
+            if getattr(variant, 'tamanho_normalizado', None) != key:
+                variant.tamanho_normalizado = key
+                changed = True
             if not variant.ativo:
                 variant.ativo = True
-                variant.save(update_fields=['ativo'])
+                changed = True
+            if changed:
+                variant.save()
             updated_variants.append(variant)
         else:
-            variant = ProductVariant.objects.create(
-                product=product,
-                tamanho=size,
-                ativo=True,
-                estoque_minimo=0
-            )
+            create_kwargs = {
+                'product': product,
+                'tamanho': label,
+                'ativo': True,
+                'estoque_minimo': 0
+            }
+            if hasattr(ProductVariant, 'tamanho_normalizado'):
+                create_kwargs['tamanho_normalizado'] = key
+            variant = ProductVariant.objects.create(**create_kwargs)
             updated_variants.append(variant)
 
     # 2. Verifica variantes existentes ausentes na solicitação
     for variant in existing_variants:
-        if variant.tamanho.lower() not in requested_sizes_lower:
+        var_key = canonical_size_key(variant.tamanho)
+        if var_key not in requested_keys:
             if variant_has_history_or_stock(variant):
                 # Mantém ativa e gera aviso
                 if not variant.ativo:
@@ -385,4 +449,5 @@ def sync_product_variants(product, tamanhos_str):
                     variant.save(update_fields=['ativo'])
 
     return updated_variants, warning_messages
+
 

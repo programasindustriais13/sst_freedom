@@ -25,12 +25,15 @@ class Product(models.Model):
         ('OUTRO', 'Outro'),
     )
 
+    from .constants import UNIDADE_MEDIDA_CHOICES
+    UNIDADE_MEDIDA_CHOICES = UNIDADE_MEDIDA_CHOICES
+
     nome = models.CharField(max_length=255, verbose_name="Nome do Produto")
     tipo_produto = models.CharField(max_length=50, choices=TIPO_PRODUTO_CHOICES, default='EPI', verbose_name="Tipo de Produto")
     categoria = models.CharField(max_length=50, choices=CATEGORIA_CHOICES, blank=True, null=True, default='OUTRO', verbose_name="Categoria de Proteção")
     ca_numero = models.CharField(max_length=50, blank=True, null=True, verbose_name="C.A. (Certificado de Aprovação)")
     descricao = models.TextField(blank=True, null=True, verbose_name="Descrição")
-    unidade_medida = models.CharField(max_length=20, default="UND", verbose_name="Unidade de Medida")
+    unidade_medida = models.CharField(max_length=10, choices=UNIDADE_MEDIDA_CHOICES, default="UND", verbose_name="Unidade de Medida")
     fabricante = models.CharField(max_length=255, blank=True, null=True, verbose_name="Fabricante Padrão")
     
     exige_ca = models.BooleanField(default=True, verbose_name="Exige C.A. (Certificado de Aprovação)")
@@ -40,6 +43,46 @@ class Product(models.Model):
     class Meta:
         verbose_name = "EPI / Produto"
         verbose_name_plural = "EPIs / Produtos"
+        constraints = [
+            models.UniqueConstraint(
+                fields=['ca_numero'],
+                condition=models.Q(ca_numero__isnull=False) & ~models.Q(ca_numero=''),
+                name='unique_product_ca_numero_not_empty'
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        from .constants import normalize_unit_of_measure, UNIDADE_MEDIDA_CHOICES
+        if self.unidade_medida:
+            self.unidade_medida = normalize_unit_of_measure(self.unidade_medida)
+            valid_codes = [c[0] for c in UNIDADE_MEDIDA_CHOICES]
+            if self.unidade_medida not in valid_codes:
+                raise ValidationError({'unidade_medida': f"Unidade de medida inválida ({self.unidade_medida})."})
+
+        if self.ca_numero:
+            num_norm = "".join([c for c in str(self.ca_numero) if c.isdigit()])
+            self.ca_numero = num_norm if num_norm else None
+            if self.ca_numero:
+                dup_qs = Product.objects.filter(ca_numero=self.ca_numero)
+                if self.pk:
+                    dup_qs = dup_qs.exclude(pk=self.pk)
+                if dup_qs.exists():
+                    raise ValidationError({'ca_numero': f"Já existe um EPI cadastrado com o C.A. {self.ca_numero}."})
+        else:
+            self.ca_numero = None
+
+    def save(self, *args, **kwargs):
+        from .constants import normalize_unit_of_measure
+        if self.unidade_medida:
+            self.unidade_medida = normalize_unit_of_measure(self.unidade_medida)
+        if self.ca_numero:
+            num_norm = "".join([c for c in str(self.ca_numero) if c.isdigit()])
+            self.ca_numero = num_norm if num_norm else None
+        else:
+            self.ca_numero = None
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.nome
@@ -48,6 +91,7 @@ class Product(models.Model):
 class ProductVariant(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants', verbose_name="Produto")
     tamanho = models.CharField(max_length=20, default="U", verbose_name="Tamanho/Numeração/Grade")
+    tamanho_normalizado = models.CharField(max_length=20, default="U", db_index=True, verbose_name="Chave Normalizada do Tamanho")
     sku = models.CharField(max_length=100, blank=True, null=True, verbose_name="SKU / Código Interno")
     codigo_barras = models.CharField(max_length=100, blank=True, null=True, verbose_name="Código de Barras")
     
@@ -59,11 +103,30 @@ class ProductVariant(models.Model):
         verbose_name = "Variante de EPI"
         verbose_name_plural = "Variantes de EPI"
         unique_together = ('product', 'tamanho')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['product', 'tamanho_normalizado'],
+                name='unique_product_variant_normalized'
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        from ppe.services import canonical_size_key, normalize_size_label
+        self.tamanho = normalize_size_label(self.tamanho)
+        self.tamanho_normalizado = canonical_size_key(self.tamanho)
+
+    def save(self, *args, **kwargs):
+        from ppe.services import canonical_size_key, normalize_size_label
+        self.tamanho = normalize_size_label(self.tamanho)
+        self.tamanho_normalizado = canonical_size_key(self.tamanho)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         if self.tamanho == "U":
             return self.product.nome
         return f"{self.product.nome} (Tam: {self.tamanho})"
+
 
 
 class CertificadoAprovacao(models.Model):

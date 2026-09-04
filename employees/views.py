@@ -207,3 +207,90 @@ class EmployeeDetailView(LoginRequiredMixin, DetailView):
         })
         return context
 
+
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+
+@require_http_methods(["GET"])
+def employee_search_ajax(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Autenticação necessária.'}, status=401)
+
+    user = request.user
+    user_units = user.units.all()
+    if user.is_superuser and not user_units.exists():
+        user_units = Unit.objects.all()
+
+    qs = Employee.objects.filter(unit__in=user_units).select_related('setor', 'unit', 'funcao')
+
+    # Filtro de situação cadastral (padrão: colaboradores ativos para novos lançamentos)
+    ativo_param = request.GET.get('ativo', 'true').lower()
+    if ativo_param in ('true', '1', 't'):
+        qs = qs.filter(situacao='ATIVO')
+
+    setor_id = request.GET.get('setor_id')
+    if setor_id:
+        qs = qs.filter(setor_id=setor_id)
+
+    q = request.GET.get('q', '').strip()
+    if q:
+        q_digits = "".join([c for c in q if c.isdigit()])
+        filter_q = Q(nome_completo__icontains=q) | Q(matricula__icontains=q) | Q(setor__nome__icontains=q)
+        if q_digits:
+            filter_q |= Q(cpf__icontains=q_digits)
+        qs = qs.filter(filter_q)
+
+    try:
+        page = max(1, int(request.GET.get('page', 1)))
+    except (ValueError, TypeError):
+        page = 1
+    try:
+        page_size = min(50, max(1, int(request.GET.get('page_size', 20))))
+    except (ValueError, TypeError):
+        page_size = 20
+
+    total_count = qs.count()
+    start = (page - 1) * page_size
+    end = start + page_size
+    page_qs = qs.order_by('nome_completo')[start:end]
+
+    items = []
+    for emp in page_qs:
+        # Mascara o CPF conforme LGPD (ex: ***.456.789-**)
+        cpf_clean = "".join([c for c in str(emp.cpf) if c.isdigit()])
+        if len(cpf_clean) == 11:
+            cpf_mascarado = f"***.{cpf_clean[3:6]}.{cpf_clean[6:9]}-**"
+            cpf_final = f"CPF final {cpf_clean[-4:]}"
+        else:
+            cpf_mascarado = "***"
+            cpf_final = ""
+
+        # Montagem do rótulo claro e diferenciador de homônimos
+        desc_parts = [emp.nome_completo]
+        if emp.setor:
+            desc_parts.append(emp.setor.nome)
+        if emp.matricula:
+            desc_parts.append(f"Matrícula: {emp.matricula}")
+        elif cpf_final:
+            desc_parts.append(cpf_final)
+
+        items.append({
+            'id': emp.id,
+            'text': " — ".join(desc_parts),
+            'nome': emp.nome_completo,
+            'matricula': emp.matricula or '',
+            'setor': emp.setor.nome if emp.setor else '',
+            'unit': emp.unit.codigo if emp.unit else '',
+            'cpf_mascarado': cpf_mascarado,
+        })
+
+    has_more = end < total_count
+    return JsonResponse({
+        'success': True,
+        'results': items,
+        'items': items,
+        'has_more': has_more,
+        'total_count': total_count
+    })
+
+

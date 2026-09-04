@@ -117,17 +117,69 @@
                     </table>
                 </div>
 
+                <!-- Template para novas linhas limpas do formset -->
+                <template id="empty-form-template">
+                    <tr class="formset-row">
+                        {{ formset.empty_form.id }}
+                        <td>
+                            {{ formset.empty_form.product }}
+                        </td>
+                        <td>
+                            {{ formset.empty_form.quantidade_padrao }}
+                        </td>
+                        <td>
+                            {{ formset.empty_form.vida_util_dias }}
+                        </td>
+                        <td class="text-center">
+                            <div class="form-check d-inline-block">
+                                {{ formset.empty_form.obrigatorio }}
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            <div class="form-check d-inline-block">
+                                {{ formset.empty_form.principal }}
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            <div class="d-none">{{ formset.empty_form.DELETE }}</div>
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn" title="Remover item">
+                                <i class="bi bi-trash-fill"></i>
+                            </button>
+                        </td>
+                    </tr>
+                </template>
+
                 <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center pt-3 border-top" style="border-color: var(--border-default) !important;">
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-premium btn-premium-primary px-4">
-                            <i class="bi bi-check-lg me-2"></i> Salvar Itens da Matriz
+                    <div class="d-flex flex-wrap gap-2">
+                        {% if config.status == 'ATIVA' %}
+                        <button type="submit" name="action" value="save_changes" class="btn btn-premium btn-premium-primary px-4">
+                            <i class="bi bi-check-lg me-2"></i> Salvar alterações
                         </button>
+                        {% else %}
+                        <button type="submit" name="action" value="save_and_activate" class="btn btn-premium btn-premium-primary px-4">
+                            <i class="bi bi-check-circle-fill me-2"></i> Salvar e ativar
+                        </button>
+                        <button type="submit" name="action" value="save_draft" class="btn btn-outline-warning btn-premium px-4">
+                            <i class="bi bi-file-earmark me-2"></i> Salvar como elaboração
+                        </button>
+                        {% endif %}
                         <a href="{% url 'sector_matrix_list' %}" class="btn btn-outline-secondary btn-premium px-4">
                             Voltar
                         </a>
                     </div>
+                    {% if config.status == 'ATIVA' and request.user.is_tecnico or config.status == 'ATIVA' and request.user.is_admin %}
+                    <button type="submit" form="deactivateMatrixForm" class="btn btn-sm btn-outline-warning btn-premium px-3">
+                        <i class="bi bi-pause-fill me-1"></i> Retornar para Elaboração
+                    </button>
+                    {% endif %}
                 </div>
             </form>
+
+            {% if config.status == 'ATIVA' %}
+            <form id="deactivateMatrixForm" method="post" action="{% url 'sector_matrix_deactivate' sector.id %}" style="display: none;" onsubmit="return confirm('Tem certeza que deseja retornar a matriz deste setor para Em Elaboração? O setor ficará sem matriz ativa até nova ativação.');">
+                {% csrf_token %}
+            </form>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -139,11 +191,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const addBtn = document.getElementById('add-row-btn');
     const container = document.getElementById('formset-container');
     const totalFormsInput = document.getElementById('id_ppe_matrix_entries-TOTAL_FORMS');
+    const emptyTemplate = document.getElementById('empty-form-template');
 
     if (!container || !totalFormsInput) return;
 
     function attachRemoveEvents() {
-        document.querySelectorAll('.remove-row-btn').forEach(btn => {
+        container.querySelectorAll('.remove-row-btn').forEach(btn => {
             btn.onclick = function() {
                 const row = this.closest('tr');
                 const deleteInput = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
@@ -151,50 +204,37 @@ document.addEventListener('DOMContentLoaded', function() {
                     deleteInput.checked = true;
                     row.style.display = 'none';
                 } else {
-                    row.remove();
+                    const visibleRows = container.querySelectorAll('.formset-row:not([style*="display: none"])');
+                    if (visibleRows.length > 1) {
+                        const sel = row.querySelector('.searchable-select');
+                        if (sel && sel._searchableSelectInstance) {
+                            sel._searchableSelectInstance.destroy();
+                        }
+                        row.remove();
+                    } else {
+                        alert('A matriz deve conter ao menos um item.');
+                    }
                 }
             };
         });
     }
     attachRemoveEvents();
 
-    if (addBtn) {
+    if (addBtn && emptyTemplate) {
         addBtn.addEventListener('click', function() {
-            const formCount = parseInt(totalFormsInput.value);
-            const rows = container.querySelectorAll('.formset-row');
-            if (rows.length === 0) return;
+            let totalForms = parseInt(totalFormsInput.value, 10) || 0;
+            const rowHtml = emptyTemplate.innerHTML.replace(/__prefix__/g, totalForms);
+            const tempTable = document.createElement('tbody');
+            tempTable.innerHTML = rowHtml.trim();
+            const newRow = tempTable.firstElementChild;
 
-            // Clona a primeira linha
-            const templateRow = rows[0].cloneNode(true);
-            templateRow.style.display = '';
-
-            // Limpa erros e inputs
-            templateRow.querySelectorAll('.invalid-feedback').forEach(el => el.remove());
-            templateRow.querySelectorAll('input, select').forEach(input => {
-                const name = input.getAttribute('name');
-                if (name) {
-                    const newName = name.replace(/-\d+-/, `-${formCount}-`);
-                    input.setAttribute('name', newName);
-                    input.setAttribute('id', `id_${newName}`);
-                }
-                if (input.type === 'checkbox') {
-                    if (input.name.endsWith('-DELETE')) {
-                        input.checked = false;
-                    } else if (input.name.endsWith('-obrigatorio') || input.name.endsWith('-principal')) {
-                        input.checked = true;
-                    }
-                } else if (input.type === 'number') {
-                    input.value = '365';
-                } else if (input.tagName === 'SELECT') {
-                    input.selectedIndex = 0;
-                } else if (input.type === 'hidden') {
-                    input.value = '';
-                }
-            });
-
-            container.appendChild(templateRow);
-            totalFormsInput.value = formCount + 1;
+            container.appendChild(newRow);
+            totalFormsInput.value = totalForms + 1;
             attachRemoveEvents();
+
+            if (window.initSearchableSelects) {
+                window.initSearchableSelects(newRow);
+            }
         });
     }
 });

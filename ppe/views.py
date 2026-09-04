@@ -79,12 +79,19 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
     success_url = "/ppe/"
 
     def get_context_data(self, **kwargs):
+        from .constants import CANONICAL_SIZES_BY_GROUP
         context = super().get_context_data(**kwargs)
         context['title'] = "Novo Produto / EPI"
+        context['size_catalog_groups'] = CANONICAL_SIZES_BY_GROUP
         
         ca_numero = None
         if self.request.method == 'POST':
             ca_numero = self.request.POST.get('ca_numero')
+            context['selected_sizes'] = self.request.POST.getlist('tamanhos')
+            context['tem_variacao_tamanho'] = self.request.POST.get('tem_variacao_tamanho', 'nao')
+        else:
+            context['selected_sizes'] = []
+            context['tem_variacao_tamanho'] = 'nao'
             
         if ca_numero:
             num_norm = "".join([c for c in str(ca_numero) if c.isdigit()])
@@ -94,13 +101,14 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        tamanhos_str = form.cleaned_data.get('tamanhos_str')
-        if tamanhos_str is None:
-            tamanhos_str = self.request.POST.get('tamanhos_str', '').strip()
+        tamanhos_list = form.cleaned_data.get('tamanhos_list')
+        if not tamanhos_list:
+            tamanhos_list = form.cleaned_data.get('tamanhos_str') or self.request.POST.getlist('tamanhos') or 'U'
             
-        _, warnings = sync_product_variants(self.object, tamanhos_str)
+        _, warnings = sync_product_variants(self.object, tamanhos_list)
         for msg in warnings:
             messages.warning(self.request, msg)
+        messages.success(self.request, f"EPI '{self.object.nome}' cadastrado com sucesso!")
         return response
 
 
@@ -110,28 +118,23 @@ class ProductUpdateView(LoginRequiredMixin, UpdateView):
     template_name = "ppe/product_form.html"
     success_url = "/ppe/"
 
-    def get_initial(self):
-        initial = super().get_initial()
-        if hasattr(self, 'object') and self.object:
-            active_vars = self.object.variants.filter(ativo=True).order_by('id')
-            if active_vars.exists():
-                initial['tamanhos_str'] = ", ".join([v.tamanho for v in active_vars])
-        return initial
-
     def get_context_data(self, **kwargs):
+        from .constants import CANONICAL_SIZES_BY_GROUP
         context = super().get_context_data(**kwargs)
         context['title'] = f"Editar Produto: {self.object.nome}"
+        context['size_catalog_groups'] = CANONICAL_SIZES_BY_GROUP
         
-        if 'form' in context and hasattr(self, 'object') and self.object and not context['form'].is_bound:
-            active_vars = self.object.variants.filter(ativo=True).order_by('id')
-            if active_vars.exists():
-                context['form'].fields['tamanhos_str'].initial = ", ".join([v.tamanho for v in active_vars])
-
-        ca_numero = None
+        active_vars = list(self.object.variants.filter(ativo=True).values_list('tamanho', flat=True))
+        non_unique = [t for t in active_vars if t != 'U']
+        
         if self.request.method == 'POST':
             ca_numero = self.request.POST.get('ca_numero')
-        elif hasattr(self, 'object') and self.object:
+            context['selected_sizes'] = self.request.POST.getlist('tamanhos')
+            context['tem_variacao_tamanho'] = self.request.POST.get('tem_variacao_tamanho', 'nao')
+        else:
             ca_numero = self.object.ca_numero
+            context['selected_sizes'] = non_unique
+            context['tem_variacao_tamanho'] = 'sim' if non_unique else 'nao'
             
         if ca_numero:
             num_norm = "".join([c for c in str(ca_numero) if c.isdigit()])
@@ -141,13 +144,14 @@ class ProductUpdateView(LoginRequiredMixin, UpdateView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        tamanhos_str = form.cleaned_data.get('tamanhos_str')
-        if tamanhos_str is None:
-            tamanhos_str = self.request.POST.get('tamanhos_str', '').strip()
+        tamanhos_list = form.cleaned_data.get('tamanhos_list')
+        if not tamanhos_list:
+            tamanhos_list = form.cleaned_data.get('tamanhos_str') or self.request.POST.getlist('tamanhos') or 'U'
             
-        _, warnings = sync_product_variants(self.object, tamanhos_str)
+        _, warnings = sync_product_variants(self.object, tamanhos_list)
         for msg in warnings:
             messages.warning(self.request, msg)
+        messages.success(self.request, f"EPI '{self.object.nome}' atualizado com sucesso!")
         return response
 
 
@@ -440,27 +444,107 @@ def delivery_sign_view(request, pk):
 
 @require_http_methods(["GET"])
 def product_search_ajax(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Autenticação necessária.'}, status=401)
+
     q = request.GET.get('q', '').strip()
-    if not q:
-        return JsonResponse({'items': []})
-    
-    # Busca por nome (insensitivo) ou CA
+    try:
+        page = max(1, int(request.GET.get('page', 1)))
+    except (ValueError, TypeError):
+        page = 1
+    try:
+        page_size = min(50, max(1, int(request.GET.get('page_size', 20))))
+    except (ValueError, TypeError):
+        page_size = 20
+
+    tipo_produto = request.GET.get('tipo_produto', '').strip()
+
     products = Product.objects.filter(ativo=True)
-    products = products.filter(
-        models.Q(nome__icontains=q) | 
-        models.Q(ca_numero__icontains=q)
-    )
-    
+    if tipo_produto:
+        products = products.filter(tipo_produto=tipo_produto)
+
+    if q:
+        q_digits = "".join([c for c in q if c.isdigit()])
+        filter_q = models.Q(nome__icontains=q) | models.Q(fabricante__icontains=q)
+        if q_digits:
+            filter_q |= models.Q(ca_numero__icontains=q_digits)
+        else:
+            filter_q |= models.Q(ca_numero__icontains=q)
+        products = products.filter(filter_q)
+
+    total_count = products.count()
+    start = (page - 1) * page_size
+    end = start + page_size
+    page_qs = products.order_by('nome')[start:end]
+
     items = []
-    for p in products[:10]:
+    for p in page_qs:
+        text_display = f"{p.nome} — C.A. {p.ca_numero}" if p.ca_numero else p.nome
         items.append({
             'id': p.id,
+            'text': text_display,
             'nome': p.nome,
             'tipo_produto': p.tipo_produto,
             'ca_numero': p.ca_numero or '',
             'unidade_medida': p.unidade_medida,
+            'fabricante': p.fabricante or '',
         })
-    return JsonResponse({'items': items})
+
+    has_more = end < total_count
+    return JsonResponse({
+        'success': True,
+        'results': items,
+        'items': items,
+        'has_more': has_more,
+        'total_count': total_count
+    })
+
+
+@require_http_methods(["GET"])
+def product_variants_ajax(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Autenticação necessária.'}, status=401)
+
+    product_id = request.GET.get('product_id')
+    if not product_id:
+        return JsonResponse({'error': 'Parâmetro product_id é obrigatório.'}, status=400)
+
+    try:
+        product = Product.objects.get(id=int(product_id), ativo=True)
+    except (Product.DoesNotExist, ValueError):
+        return JsonResponse({'error': 'Produto não encontrado ou inativo.'}, status=404)
+
+    variants = list(ProductVariant.objects.filter(product=product, ativo=True))
+
+    def sort_variant_key(v):
+        t = v.tamanho.strip().upper()
+        predefined = {'PP': 1, 'P': 2, 'M': 3, 'G': 4, 'GG': 5, 'XG': 6, 'XXG': 7, 'U': 99}
+        if t in predefined:
+            return (0, predefined[t], t)
+        if t.isdigit():
+            return (1, int(t), t)
+        return (2, 0, t)
+
+    variants.sort(key=sort_variant_key)
+
+    items = []
+    for v in variants:
+        items.append({
+            'id': v.id,
+            'tamanho': v.tamanho,
+            'text': f"Tamanho: {v.tamanho}" if v.tamanho != 'U' else 'Tamanho Único (U)'
+        })
+
+    return JsonResponse({
+        'success': True,
+        'product_id': product.id,
+        'product_nome': product.nome,
+        'ca_numero': product.ca_numero or '',
+        'unidade_medida': product.unidade_medida,
+        'variants': items,
+        'count': len(items)
+    })
+
 
 
 @require_http_methods(["POST"])
@@ -760,9 +844,25 @@ class SectorPPEMatrixEditView(LoginRequiredMixin, View):
         })
 
     def post(self, request, *args, **kwargs):
+        action = request.POST.get('action', 'save_draft')
         config, _ = SectorPPEMatrix.objects.get_or_create(sector=self.sector)
         formset = PPEMatrixSectorFormSet(request.POST, instance=self.sector)
         if formset.is_valid():
+            # Conta itens que permanecerão ativos após a submissão
+            active_items_count = 0
+            for form in formset.forms:
+                if form.cleaned_data and not form.cleaned_data.get('DELETE', False):
+                    if form.cleaned_data.get('product'):
+                        active_items_count += 1
+
+            if action == 'save_and_activate' and active_items_count == 0:
+                messages.error(request, "Não foi possível ativar a matriz. Adicione pelo menos um EPI.")
+                return render(request, self.template_name, {
+                    'sector': self.sector,
+                    'config': config,
+                    'formset': formset,
+                })
+
             with transaction.atomic():
                 instances = formset.save(commit=False)
                 for obj in instances:
@@ -775,18 +875,37 @@ class SectorPPEMatrixEditView(LoginRequiredMixin, View):
                 for obj in formset.deleted_objects:
                     obj.delete()
 
+                old_status = config.status
+                if action == 'save_and_activate':
+                    config.status = 'ATIVA'
+                    config.ativado_por = request.user
+                    config.ativado_em = timezone.now()
+                    config.save()
+                    msg = "Matriz do setor ativada com sucesso."
+                elif config.status == 'ATIVA':
+                    # Matriz ativa editada: mantém ativa
+                    msg = f"Alterações da matriz do setor '{self.sector.nome}' salvas com sucesso!"
+                else:
+                    # Salvar como elaboração
+                    config.status = 'EM_ELABORACAO'
+                    config.save()
+                    msg = "Matriz salva como elaboração. Ela ainda não está sendo utilizada nas recomendações de EPI."
+
                 from audit.models import log_audit
                 log_audit(
                     request=request,
-                    action=f"Atualização da matriz de EPI do setor: {self.sector.nome} ({self.sector.unit.codigo})",
+                    action=f"Atualização da matriz de EPI do setor: {self.sector.nome} ({self.sector.unit.codigo}) - Status: {config.status}",
                     model_name="SectorPPEMatrix",
                     object_id=self.sector.id,
-                    before=None,
-                    after={'setor': self.sector.nome, 'itens_salvos': len(instances)}
+                    before={'status': old_status},
+                    after={'setor': self.sector.nome, 'status': config.status, 'itens_salvos': len(instances)}
                 )
 
-            messages.success(request, f"Itens da matriz do setor '{self.sector.nome}' salvos com sucesso!")
+            messages.success(request, msg)
             return redirect('sector_matrix_list')
+
+        if action == 'save_and_activate':
+            messages.error(request, "Não foi possível ativar a matriz. Adicione pelo menos um EPI.")
 
         return render(request, self.template_name, {
             'sector': self.sector,
@@ -808,7 +927,7 @@ class SectorPPEMatrixActivateView(LoginRequiredMixin, View):
         # Valida se possui pelo menos 1 item ativo
         active_items_count = PPEMatrix.objects.filter(setor=sector, ativo=True).count()
         if active_items_count == 0:
-            messages.error(request, f"Não é possível ativar uma matriz vazia. Cadastre ao menos um EPI ativo para o setor '{sector.nome}'.")
+            messages.error(request, "Não foi possível ativar a matriz. Adicione pelo menos um EPI.")
             return redirect('sector_matrix_edit', sector_pk=sector.pk)
 
         config, _ = SectorPPEMatrix.objects.get_or_create(sector=sector)
@@ -828,7 +947,7 @@ class SectorPPEMatrixActivateView(LoginRequiredMixin, View):
             after={'status': 'ATIVA', 'ativado_por': request.user.username, 'itens_ativos': active_items_count}
         )
 
-        messages.success(request, f"Matriz de EPI do setor '{sector.nome}' ATIVADA com sucesso! As entregas para este setor agora utilizam esta recomendação.")
+        messages.success(request, "Matriz do setor ativada com sucesso.")
         return redirect('sector_matrix_list')
 
 
@@ -890,6 +1009,7 @@ class SectorPPEMatrixCreateView(LoginRequiredMixin, View):
         })
 
     def post(self, request, *args, **kwargs):
+        action = request.POST.get('action', 'save_draft')
         sector_form = PPEMatrixSectorChoiceForm(request.POST, user=request.user)
         if not sector_form.is_valid():
             formset = PPEMatrixSectorFormSet(request.POST)
@@ -909,6 +1029,19 @@ class SectorPPEMatrixCreateView(LoginRequiredMixin, View):
 
         formset = PPEMatrixSectorFormSet(request.POST, instance=sector)
         if formset.is_valid():
+            active_items_count = 0
+            for form in formset.forms:
+                if form.cleaned_data and not form.cleaned_data.get('DELETE', False):
+                    if form.cleaned_data.get('product'):
+                        active_items_count += 1
+
+            if action == 'save_and_activate' and active_items_count == 0:
+                messages.error(request, "Não foi possível ativar a matriz. Adicione pelo menos um EPI.")
+                return render(request, self.template_name, {
+                    'sector_form': sector_form,
+                    'formset': formset,
+                })
+
             with transaction.atomic():
                 config, _ = SectorPPEMatrix.objects.get_or_create(sector=sector, defaults={'status': 'EM_ELABORACAO'})
                 instances = formset.save(commit=False)
@@ -922,18 +1055,32 @@ class SectorPPEMatrixCreateView(LoginRequiredMixin, View):
                 for obj in formset.deleted_objects:
                     obj.delete()
 
+                if action == 'save_and_activate':
+                    config.status = 'ATIVA'
+                    config.ativado_por = request.user
+                    config.ativado_em = timezone.now()
+                    config.save()
+                    msg = "Matriz do setor ativada com sucesso."
+                else:
+                    config.status = 'EM_ELABORACAO'
+                    config.save()
+                    msg = "Matriz salva como elaboração. Ela ainda não está sendo utilizada nas recomendações de EPI."
+
                 from audit.models import log_audit
                 log_audit(
                     request=request,
-                    action=f"Criação da matriz de EPI do setor: {sector.nome} ({sector.unit.codigo})",
+                    action=f"Criação da matriz de EPI do setor: {sector.nome} ({sector.unit.codigo}) - Status: {config.status}",
                     model_name="SectorPPEMatrix",
                     object_id=sector.id,
                     before=None,
-                    after={'setor': sector.nome, 'itens_cadastrados': len(instances)}
+                    after={'setor': sector.nome, 'status': config.status, 'itens_cadastrados': len(instances)}
                 )
 
-            messages.success(request, f"Matriz de EPI do setor '{sector.nome}' cadastrada com sucesso! Ela foi criada em modo 'Em Elaboração'.")
+            messages.success(request, msg)
             return redirect('sector_matrix_list')
+
+        if action == 'save_and_activate':
+            messages.error(request, "Não foi possível ativar a matriz. Adicione pelo menos um EPI.")
 
         return render(request, self.template_name, {
             'sector_form': sector_form,
@@ -976,6 +1123,36 @@ def ca_consultar_ajax(request):
     if not q_clean.isdigit() or len(q_clean) > 20:
         return JsonResponse({'success': False, 'error': 'Número de CA inválido (deve conter apenas dígitos, máximo 20 caracteres).'}, status=400)
         
+    # Check if CA is already registered in an existing Product in the system
+    exclude_id = request.GET.get('exclude_id')
+    existing_qs = Product.objects.filter(ca_numero=q_clean)
+    if exclude_id and exclude_id.isdigit():
+        existing_qs = existing_qs.exclude(id=int(exclude_id))
+        
+    existing_product = existing_qs.first()
+    if existing_product:
+        variantes = list(existing_product.variants.filter(ativo=True).values_list('tamanho', flat=True))
+        if not variantes:
+            variantes = [existing_product.tamanho_padrao] if existing_product.tamanho_padrao else ['Único']
+        return JsonResponse({
+            'success': True,
+            'already_registered': True,
+            'existing_product': {
+                'id': existing_product.id,
+                'nome': existing_product.nome,
+                'ca_numero': existing_product.ca_numero,
+                'variantes': variantes,
+                'variantes_str': ', '.join(variantes) if variantes else 'Único',
+                'edit_url': reverse('product_update', args=[existing_product.id]),
+            },
+            'message': (
+                f"Este C.A. já está cadastrado no sistema.\n\n"
+                f"EPI: {existing_product.nome}\n"
+                f"Tamanhos atuais: {', '.join(variantes)}\n\n"
+                f"Para incluir outro tamanho, edite o cadastro existente. Não crie um novo EPI para cada tamanho."
+            )
+        })
+
     from .ca_services import ConsultaCAService
     
     force = request.GET.get('force') == 'true'

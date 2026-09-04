@@ -232,13 +232,19 @@ class UnifiedFiscalNoteTestCase(TestCase):
         self.user = User.objects.create_user(username="almoxarife3", password="pwd", profile_type="ALMOXARIFE")
         self.supplier = Supplier.objects.create(razao_social="Fornecedor de EPIs LTDA", cnpj_cpf="98765432100019")
         
-        # Cria um produto EPI
+        # Cria um produto EPI com variante G pré-cadastrada pelo SESMT
         self.epi = Product.objects.create(
             nome="Luva de Teste", 
             tipo_produto="EPI", 
             categoria="PROTECAO_MEMBROS_SUP", 
             ca_numero="CA-12345",
             exige_ca=True
+        )
+        self.variant_epi_g = ProductVariant.objects.create(
+            product=self.epi,
+            tamanho="G",
+            tamanho_normalizado="G",
+            ativo=True
         )
         
         # Cria um produto não-EPI

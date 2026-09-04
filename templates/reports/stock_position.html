@@ -24,7 +24,7 @@
             </div>
             <div class="col-12 col-md-3">
                 <label class="form-label text-secondary small fw-semibold">EPI / Produto</label>
-                <select name="product" class="form-select form-control-premium">
+                <select name="product" class="form-select form-control-premium searchable-select" data-placeholder="-- Todos os Produtos --">
                     <option value="">-- Todos os Produtos --</option>
                     {% for p in products %}
                     <option value="{{ p.id }}" {% if filter_product|stringformat:"s" == p.id|stringformat:"s" %}selected{% endif %}>{{ p.nome }}</option>

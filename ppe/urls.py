@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     ProductListView, ProductCreateView, ProductUpdateView, ProductDetailView, ProductVariantCreateView,
     CertificadoAprovacaoListView, CertificadoAprovacaoCreateView, PPEDeliveryListView,
-    PPEDeliveryCreateView, delivery_sign_view, product_search_ajax, product_add_ajax,
+    PPEDeliveryCreateView, delivery_sign_view, product_search_ajax, product_add_ajax, product_variants_ajax,
     PPEMatrixCreateView, PPEMatrixUpdateView, ppe_matrix_toggle_active,
     PPEMatrixListView, PPEMatrixBulkCreateView, PPEMatrixBulkUpdateView, PPEMatrixBulkDeleteView,
     SectorPPEMatrixListView, SectorPPEMatrixEditView, SectorPPEMatrixActivateView, SectorPPEMatrixDeactivateView,
@@ -27,6 +27,8 @@ urlpatterns = [
     
     path('add/ajax/', product_add_ajax, name='product_add_ajax'),
     path('search_ajax/', product_search_ajax, name='product_search_ajax'),
+    path('api/search/', product_search_ajax, name='product_api_search'),
+    path('api/variants/', product_variants_ajax, name='product_variants_ajax'),
     
     path('matrix/add/<int:function_pk>/', LegacyMatrixRedirectView.as_view(), name='ppe_matrix_create'),
     path('matrix/<int:pk>/edit/', LegacyMatrixRedirectView.as_view(), name='ppe_matrix_update'),

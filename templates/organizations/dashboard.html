@@ -21,6 +21,45 @@
 </div>
 
 <div class="row g-4">
+    <!-- Empresas -->
+    <div class="col-12 col-lg-6">
+        <div class="card-premium">
+            <h4 class="mb-3 text-info"><i class="bi bi-buildings"></i> Empresas</h4>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0" style="--bs-table-bg: transparent; --bs-table-border-color: var(--border-color);">
+                    <thead>
+                        <tr>
+                            <th class="text-muted border-0">Nome Fantasia</th>
+                            <th class="text-muted border-0">Razão Social</th>
+                            <th class="text-muted border-0">CNPJ</th>
+                            <th class="text-muted border-0 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for comp in companies %}
+                        <tr>
+                            <td class="text-light border-secondary fw-semibold">{{ comp.nome_fantasia }}</td>
+                            <td class="border-secondary text-secondary small">{{ comp.razao_social }}</td>
+                            <td class="border-secondary">{{ comp.cnpj }}</td>
+                            <td class="text-center border-secondary">
+                                {% if comp.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted border-0 py-4">Nenhuma empresa cadastrada ou vinculada.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- Unidades -->
     <div class="col-12 col-lg-6">
         <div class="card-premium">
@@ -31,6 +70,7 @@
                         <tr>
                             <th class="text-muted border-0">Código</th>
                             <th class="text-muted border-0">Nome</th>
+                            <th class="text-muted border-0">Empresa</th>
                             <th class="text-muted border-0">Cidade/UF</th>
                             <th class="text-muted border-0 text-center">Status</th>
                         </tr>
@@ -39,7 +79,8 @@
                         {% for unit in units %}
                         <tr>
                             <td class="text-light border-secondary">{{ unit.codigo }}</td>
-                            <td class="border-secondary">{{ unit.nome }}</td>
+                            <td class="border-secondary fw-semibold">{{ unit.nome }}</td>
+                            <td class="border-secondary text-secondary small">{{ unit.company.nome_fantasia }}</td>
                             <td class="border-secondary">{{ unit.cidade }}/{{ unit.estado }}</td>
                             <td class="text-center border-secondary">
                                 {% if unit.ativo %}
@@ -51,7 +92,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="4" class="text-center text-muted border-0 py-4">Nenhuma unidade cadastrada ou vinculada.</td>
+                            <td colspan="5" class="text-center text-muted border-0 py-4">Nenhuma unidade cadastrada ou vinculada.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -78,7 +119,7 @@
                         <tr>
                             <td class="text-light border-secondary">{{ sector.nome }}</td>
                             <td class="border-secondary">{{ sector.codigo|default:"-" }}</td>
-                            <td class="border-secondary">{{ sector.unit.codigo }}</td>
+                            <td class="border-secondary">{{ sector.unit.nome }}</td>
                         </tr>
                         {% empty %}
                         <tr>
@@ -140,7 +181,7 @@
                         <tr>
                             <td class="text-light border-secondary">{{ loc.codigo }}</td>
                             <td class="border-secondary">{{ loc.nome }}</td>
-                            <td class="border-secondary">{{ loc.unit.codigo }}</td>
+                            <td class="border-secondary">{{ loc.unit.nome }}</td>
                             <td class="border-secondary">{{ loc.get_tipo_display }}</td>
                             <td class="text-center border-secondary">
                                 {% if loc.ativo %}

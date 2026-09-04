@@ -17,12 +17,17 @@ class OrganizationDashboardView(LoginRequiredMixin, TemplateView):
         if user.is_superuser and not user_units.exists():
             user_units = Unit.objects.all()
 
+        if user.is_superuser:
+            companies_qs = Company.objects.all()
+        else:
+            companies_qs = Company.objects.filter(units__in=user_units).distinct()
+
         context.update({
-            'companies': Company.objects.all(),
-            'units': Unit.objects.filter(id__in=user_units),
-            'sectors': Sector.objects.filter(unit__in=user_units),
-            'cost_centers': CostCenter.objects.all(),
-            'locations': InventoryLocation.objects.filter(unit__in=user_units),
+            'companies': companies_qs.order_by('nome_fantasia'),
+            'units': Unit.objects.filter(id__in=user_units).select_related('company').order_by('nome'),
+            'sectors': Sector.objects.filter(unit__in=user_units).select_related('unit', 'unit__company').order_by('nome'),
+            'cost_centers': CostCenter.objects.all().order_by('nome'),
+            'locations': InventoryLocation.objects.filter(unit__in=user_units).select_related('unit', 'unit__company').order_by('nome'),
         })
         return context
 
@@ -46,7 +51,7 @@ class CompanyCreateView(LoginRequiredMixin, CreateView):
 
 class UnitCreateView(LoginRequiredMixin, CreateView):
     model = Unit
-    fields = ['company', 'codigo', 'nome', 'cnpj', 'cidade', 'estado', 'ativo']
+    fields = ['company', 'codigo', 'nome', 'cidade', 'estado', 'ativo']
     template_name = "organizations/form.html"
     success_url = reverse_lazy('organization_dashboard')
 
@@ -58,6 +63,23 @@ class UnitCreateView(LoginRequiredMixin, CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['title'] = "Nova Unidade"
+        return context
+
+
+class UnitUpdateView(LoginRequiredMixin, UpdateView):
+    model = Unit
+    fields = ['company', 'codigo', 'nome', 'cidade', 'estado', 'ativo']
+    template_name = "organizations/form.html"
+    success_url = reverse_lazy('organization_dashboard')
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_admin:
+            raise PermissionDenied("Apenas administradores podem editar unidades.")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['title'] = "Editar Unidade"
         return context
 
 

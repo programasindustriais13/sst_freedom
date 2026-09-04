@@ -8,6 +8,48 @@
 <li class="breadcrumb-item active text-secondary" aria-current="page">{{ title }}</li>
 {% endblock %}
 
+{% block extra_head %}
+<style>
+.btn-size-chip {
+    min-width: 44px;
+    font-weight: 500;
+    transition: all 0.15s ease-in-out;
+    border-radius: 0.375rem;
+}
+.btn-size-chip.active {
+    background-color: #0d6efd !important;
+    border-color: #0d6efd !important;
+    color: #fff !important;
+    box-shadow: 0 0 8px rgba(13, 110, 253, 0.4);
+}
+.selected-size-badge {
+    background-color: rgba(13, 110, 253, 0.2);
+    border: 1px solid rgba(13, 110, 253, 0.5);
+    color: #e2e8f0;
+    padding: 0.35rem 0.65rem;
+    border-radius: 0.375rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+}
+.selected-size-badge .btn-close-chip {
+    cursor: pointer;
+    opacity: 0.7;
+    background: transparent;
+    border: none;
+    color: #fff;
+    padding: 0;
+    font-size: 1rem;
+    line-height: 1;
+}
+.selected-size-badge .btn-close-chip:hover {
+    opacity: 1;
+    color: #ef4444;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-12 col-md-10 col-lg-8">
@@ -15,7 +57,7 @@
             {% csrf_token %}
             
             {% if form.non_field_errors %}
-            <div class="alert alert-danger">
+            <div class="alert alert-danger mb-4">
                 {{ form.non_field_errors|join:", " }}
             </div>
             {% endif %}
@@ -150,20 +192,21 @@
                 </div>
             </div>
 
-            <!-- 3. Card "Dados complementares do EPI" -->
+            <!-- 3. Card "Configuração Interna e Controle de Estoque" -->
             <div class="card-premium mb-4" id="card_dados_complementares">
-                <h4 class="mb-3 text-light"><i class="bi bi-pencil-square me-2 text-warning"></i>3. Dados Complementares do EPI</h4>
+                <h4 class="mb-3 text-light"><i class="bi bi-sliders me-2 text-warning"></i>3. Configuração Interna e Controle de Estoque</h4>
                 
                 <div class="row">
-                    <div class="col-md-6 mb-3">
+                    <!-- LINHA 1: Nome Interno e Categoria -->
+                    <div class="col-12 col-md-6 mb-3">
                         <label for="id_nome" class="form-label text-secondary fw-semibold">Nome Interno / Resumido</label>
-                        <input type="text" name="nome" id="id_nome" class="form-control form-control-premium" value="{{ form.nome.value|default:'' }}" placeholder="Ex: Respirador PFF2" required>
+                        <input type="text" name="nome" id="id_nome" class="form-control form-control-premium" value="{{ form.nome.value|default:'' }}" placeholder="Ex: Luva de Vaqueta ou Óculos de Proteção" required>
                         {% if form.nome.errors %}
                         <div class="invalid-feedback d-block">{{ form.nome.errors|join:", " }}</div>
                         {% endif %}
                     </div>
                     
-                    <div class="col-md-6 mb-3">
+                    <div class="col-12 col-md-6 mb-3">
                         <label for="id_categoria" class="form-label text-secondary fw-semibold">Categoria de Proteção Interna</label>
                         <select name="categoria" id="id_categoria" class="form-select form-control-premium" required>
                             {% for val, label in form.categoria.field.choices %}
@@ -175,29 +218,82 @@
                         {% endif %}
                     </div>
 
-                    <div class="col-md-6 mb-3">
-                        <label for="id_unidade_medida" class="form-label text-secondary fw-semibold">Unidade de Medida</label>
-                        <input type="text" name="unidade_medida" id="id_unidade_medida" class="form-control form-control-premium" value="{{ form.unidade_medida.value|default:'UND' }}" required>
-                        {% if form.unidade_medida.errors %}
-                        <div class="invalid-feedback d-block">{{ form.unidade_medida.errors|join:", " }}</div>
-                        {% endif %}
-                    </div>
-
-                    <div class="col-md-6 mb-3">
+                    <!-- LINHA 2: Marca Comercial e Como será contado no estoque -->
+                    <div class="col-12 col-md-6 mb-3">
                         <label for="id_fabricante" class="form-label text-secondary fw-semibold">Marca Comercial (quando diferente)</label>
-                        <input type="text" name="fabricante" id="id_fabricante" class="form-control form-control-premium" value="{{ form.fabricante.value|default:'' }}" placeholder="Ex: 3M">
+                        <input type="text" name="fabricante" id="id_fabricante" class="form-control form-control-premium" value="{{ form.fabricante.value|default:'' }}" placeholder="Ex: 3M, Volk, Marluvas">
                         {% if form.fabricante.errors %}
                         <div class="invalid-feedback d-block">{{ form.fabricante.errors|join:", " }}</div>
                         {% endif %}
                     </div>
 
-                    <div class="col-md-12 mb-3">
-                        <label for="id_tamanhos_str" class="form-label text-secondary fw-semibold">Tamanhos / Variantes Disponíveis (separados por vírgula)</label>
-                        <input type="text" name="tamanhos_str" id="id_tamanhos_str" class="form-control form-control-premium" value="{{ form.tamanhos_str.value|default:'' }}" placeholder="Ex: P, M, G, GG ou 38, 39, 40 ou Único (deixe em branco para Único 'U')">
-                        <small class="text-muted d-block mt-1">Os tamanhos digitados serão cadastrados automaticamente como variantes deste produto.</small>
+                    <div class="col-12 col-md-6 mb-3">
+                        <label for="id_unidade_medida" class="form-label text-secondary fw-semibold">Como este EPI será contado no estoque?</label>
+                        <select name="unidade_medida" id="id_unidade_medida" class="form-select form-control-premium" required>
+                            {% for val, label in form.unidade_medida.field.choices %}
+                            <option value="{{ val }}" {% if form.unidade_medida.value == val %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if form.unidade_medida.errors %}
+                        <div class="invalid-feedback d-block">{{ form.unidade_medida.errors|join:", " }}</div>
+                        {% endif %}
                     </div>
 
-                    <div class="col-md-12 mb-3">
+                    <!-- LINHA 3: Pergunta Decisão de Tamanho -->
+                    <div class="col-12 mb-3">
+                        <label class="form-label text-secondary fw-semibold d-block">Este EPI possui variação de tamanho?</label>
+                        <div class="btn-group w-100" role="group" aria-label="Opções de variação de tamanho">
+                            <input type="radio" class="btn-check" name="tem_variacao_tamanho" id="tamanho_unico_radio" value="nao" autocomplete="off" {% if tem_variacao_tamanho != 'sim' %}checked{% endif %}>
+                            <label class="btn btn-outline-secondary btn-premium py-2 text-center" for="tamanho_unico_radio">
+                                <i class="bi bi-tag me-1"></i> Não — Tamanho único
+                            </label>
+
+                            <input type="radio" class="btn-check" name="tem_variacao_tamanho" id="tamanho_multiplo_radio" value="sim" autocomplete="off" {% if tem_variacao_tamanho == 'sim' %}checked{% endif %}>
+                            <label class="btn btn-outline-secondary btn-premium py-2 text-center" for="tamanho_multiplo_radio">
+                                <i class="bi bi-grid-3x3-gap me-1"></i> Sim — Possui tamanhos
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- LINHA 4: Múltiplos tamanhos (visível se tem_variacao_tamanho == 'sim') -->
+                    <div class="col-12 mb-3" id="container_selecao_tamanhos" style="{% if tem_variacao_tamanho != 'sim' %}display: none;{% endif %}">
+                        <div class="p-3 rounded-3 border border-secondary" style="background-color: rgba(255, 255, 255, 0.02);">
+                            <div class="d-flex align-items-center gap-2 mb-3 text-info">
+                                <i class="bi bi-info-circle-fill"></i>
+                                <span class="small fw-semibold">Cadastre o EPI uma única vez e selecione aqui todos os tamanhos comercializados para este mesmo C.A.</span>
+                            </div>
+
+                            {% for grp in size_catalog_groups %}
+                            <div class="mb-3">
+                                <div class="text-secondary small fw-bold text-uppercase mb-1">{{ grp.titulo|default:grp.grupo }}</div>
+                                <div class="d-flex flex-wrap gap-1">
+                                    {% for sz in grp.tamanhos %}
+                                    <button type="button" class="btn btn-sm btn-outline-secondary btn-size-chip" data-size="{{ sz }}">
+                                        {{ sz }}
+                                    </button>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endfor %}
+
+                            <!-- LINHA 5: Resumo dos tamanhos selecionados -->
+                            <div class="mt-3 pt-3 border-top border-secondary">
+                                <label class="form-label text-secondary fw-semibold small d-block mb-2">Tamanhos selecionados:</label>
+                                <div id="summary_chips_container" class="d-flex flex-wrap gap-2 align-items-center">
+                                    <span class="text-muted small" id="no_sizes_placeholder">Nenhum tamanho selecionado. Clique nos tamanhos acima para selecionar.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Input oculto para submissão dos tamanhos -->
+                    <input type="hidden" name="tamanhos_str" id="id_tamanhos_str" value="{{ form.tamanhos_str.value|default:'' }}">
+                    {% if form.tamanhos_str.errors %}
+                    <div class="invalid-feedback d-block px-3">{{ form.tamanhos_str.errors|join:", " }}</div>
+                    {% endif %}
+
+                    <!-- LINHA 6: Observações / Descrição Complementar -->
+                    <div class="col-12 mb-3">
                         <label for="id_descricao" class="form-label text-secondary fw-semibold">Observações / Descrição Complementar</label>
                         <textarea name="descricao" id="id_descricao" rows="3" class="form-control form-control-premium" placeholder="Informações internas de uso, localização no almoxarifado, etc.">{{ form.descricao.value|default:'' }}</textarea>
                         {% if form.descricao.errors %}
@@ -208,8 +304,8 @@
             </div>
 
             <!-- Action buttons -->
-            <div class="d-flex gap-2 mb-5">
-                <button type="submit" class="btn btn-premium btn-premium-primary px-4">
+            <div class="d-flex gap-2 mb-5" id="form_actions_container">
+                <button type="submit" id="btn_submit_product" class="btn btn-premium btn-premium-primary px-4">
                     <i class="bi bi-check-lg me-2"></i> Salvar
                 </button>
                 <a href="/ppe/" class="btn btn-outline-secondary btn-premium px-4">
@@ -227,8 +323,12 @@
         const caField = document.getElementById('id_ca_numero');
         const feedbackDiv = document.getElementById('ca_status_feedback');
         const cardDadosOficiais = document.getElementById('card_dados_oficiais');
+        const cardDadosComplementares = document.getElementById('card_dados_complementares');
         const btnConsultarContainer = document.getElementById('btn_consultar_container');
         const btnForceConsultar = document.getElementById('btn_force_consultar');
+        const formActions = document.getElementById('form_actions_container');
+        const submitBtn = document.getElementById('btn_submit_product');
+        const form = document.getElementById('product_form');
         
         // Complementary fields
         const nomeField = document.getElementById('id_nome');
@@ -249,11 +349,152 @@
         const oficialCidade = document.getElementById('oficial_cidade');
         const oficialUf = document.getElementById('oficial_uf');
         const oficialAprovadoPara = document.getElementById('oficial_aprovado_para');
+
+        // Size variation elements
+        const radioUnico = document.getElementById('tamanho_unico_radio');
+        const radioMultiplo = document.getElementById('tamanho_multiplo_radio');
+        const containerTamanhos = document.getElementById('container_selecao_tamanhos');
+        const summaryContainer = document.getElementById('summary_chips_container');
+        const inputTamanhosStr = document.getElementById('id_tamanhos_str');
+        const noSizesPlaceholder = document.getElementById('no_sizes_placeholder');
+        const sizeChips = document.querySelectorAll('.btn-size-chip');
         
         let lastConsultedCA = "";
         let isQuerying = false;
         let debounceTimeout;
+
+        // Current product ID for update vs create
+        const currentProductId = '{{ form.instance.pk|default:"" }}';
+
+        // -------------------------------------------------------------
+        // Keyboard Accessibility / Enter Key Prevention
+        // -------------------------------------------------------------
+        form.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                // Allow normal Enter behavior in textarea
+                if (e.target.tagName.toLowerCase() === 'textarea') {
+                    return;
+                }
+                // Allow submit if user is specifically focused on a submit button
+                if (e.target.tagName.toLowerCase() === 'button' && e.target.type === 'submit') {
+                    return;
+                }
+                // If Enter in CA field, trigger CA consult only and do not submit form
+                if (e.target.id === 'id_ca_numero') {
+                    e.preventDefault();
+                    const cleanCA = e.target.value.trim().replace(/\D/g, '');
+                    if (cleanCA) {
+                        consultarCA(cleanCA);
+                    }
+                    return;
+                }
+                // In all other text inputs, prevent accidental form submission
+                e.preventDefault();
+            }
+        });
+
+        // -------------------------------------------------------------
+        // Size Variation & Visual Chips Logic
+        // -------------------------------------------------------------
+        let selectedSizes = new Set();
+        {% if selected_sizes %}
+            {% for s in selected_sizes %}
+                selectedSizes.add('{{ s|escapejs }}');
+            {% endfor %}
+        {% endif %}
+
+        // If form.tamanhos_str had errors or custom value
+        const initialTamanhosStr = (inputTamanhosStr.value || '').trim();
+        if (initialTamanhosStr && initialTamanhosStr !== 'U' && selectedSizes.size === 0) {
+            initialTamanhosStr.split(',').forEach(item => {
+                const cleanItem = item.trim();
+                if (cleanItem && cleanItem !== 'U') {
+                    selectedSizes.add(cleanItem);
+                }
+            });
+        }
+
+        function updateSizeDisplay() {
+            // Update visual state of catalog chips
+            sizeChips.forEach(chip => {
+                const sz = chip.getAttribute('data-size');
+                if (selectedSizes.has(sz)) {
+                    chip.classList.add('active');
+                    chip.classList.remove('btn-outline-secondary');
+                    chip.classList.add('btn-primary');
+                } else {
+                    chip.classList.remove('active');
+                    chip.classList.add('btn-outline-secondary');
+                    chip.classList.remove('btn-primary');
+                }
+            });
+
+            // Update summary container badges
+            summaryContainer.innerHTML = '';
+            if (selectedSizes.size === 0) {
+                summaryContainer.appendChild(noSizesPlaceholder);
+                noSizesPlaceholder.style.display = 'inline-block';
+            } else {
+                noSizesPlaceholder.style.display = 'none';
+                Array.from(selectedSizes).forEach(sz => {
+                    const badge = document.createElement('span');
+                    badge.className = 'selected-size-badge';
+                    badge.innerHTML = `<span>${sz}</span><button type="button" class="btn-close-chip" data-size="${sz}" title="Remover tamanho">&times;</button>`;
+                    badge.querySelector('.btn-close-chip').addEventListener('click', function(e) {
+                        e.preventDefault();
+                        selectedSizes.delete(sz);
+                        updateSizeDisplay();
+                    });
+                    summaryContainer.appendChild(badge);
+                });
+            }
+
+            if (radioMultiplo.checked) {
+                inputTamanhosStr.value = Array.from(selectedSizes).join(', ');
+            } else {
+                inputTamanhosStr.value = 'U';
+            }
+        }
+
+        // Chip button click listener
+        sizeChips.forEach(chip => {
+            chip.addEventListener('click', function(e) {
+                e.preventDefault();
+                const sz = this.getAttribute('data-size');
+                if (selectedSizes.has(sz)) {
+                    selectedSizes.delete(sz);
+                } else {
+                    selectedSizes.add(sz);
+                }
+                updateSizeDisplay();
+            });
+        });
+
+        // Radio toggle listeners
+        radioUnico.addEventListener('change', function() {
+            if (this.checked) {
+                containerTamanhos.style.display = 'none';
+                inputTamanhosStr.value = 'U';
+            }
+        });
+
+        radioMultiplo.addEventListener('change', function() {
+            if (this.checked) {
+                containerTamanhos.style.display = 'block';
+                updateSizeDisplay();
+            }
+        });
+
+        // Initial setup of size display
+        if (radioMultiplo.checked) {
+            updateSizeDisplay();
+        } else {
+            inputTamanhosStr.value = 'U';
+        }
         
+        // -------------------------------------------------------------
+        // CA Consultation & Duplicate Prevention
+        // -------------------------------------------------------------
         // Initialize state from server context
         if (caField && caField.value.trim()) {
             const initialCA = caField.value.trim().replace(/\D/g, '');
@@ -310,16 +551,22 @@
         function showInitialState() {
             lastConsultedCA = "";
             cardDadosOficiais.style.display = 'none';
+            cardDadosComplementares.style.display = 'block';
+            if (submitBtn) submitBtn.disabled = false;
             btnConsultarContainer.style.display = 'none';
             feedbackDiv.className = 'mt-3 p-3 rounded-3 border border-secondary text-muted';
+            feedbackDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.02)';
             feedbackDiv.innerHTML = '<span class="small">Informe o número do CA para iniciar o cadastro do EPI.</span>';
             clearOfficialFields();
         }
         
         function showChangedState() {
             cardDadosOficiais.style.display = 'none';
+            cardDadosComplementares.style.display = 'block';
+            if (submitBtn) submitBtn.disabled = false;
             btnConsultarContainer.style.display = 'none';
             feedbackDiv.className = 'mt-3 p-3 rounded-3 border border-warning text-warning';
+            feedbackDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.02)';
             feedbackDiv.innerHTML = `
                 <div class="d-flex align-items-center gap-2">
                     <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
@@ -361,6 +608,7 @@
             btnConsultarContainer.style.display = 'none';
             
             feedbackDiv.className = 'mt-3 p-3 rounded-3 border border-secondary text-light';
+            feedbackDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.02)';
             feedbackDiv.innerHTML = `
                 <div class="d-flex align-items-center gap-2 text-muted">
                     <div class="spinner-border spinner-border-sm text-primary" role="status">
@@ -370,7 +618,13 @@
                 </div>
             `;
             
-            const url = `/ppe/ca/consultar_ajax/?q=${encodeURIComponent(cleanCA)}` + (force ? '&force=true' : '');
+            let url = `/ppe/ca/consultar_ajax/?q=${encodeURIComponent(cleanCA)}`;
+            if (currentProductId) {
+                url += `&exclude_id=${encodeURIComponent(currentProductId)}`;
+            }
+            if (force) {
+                url += '&force=true';
+            }
             
             fetch(url)
                 .then(response => {
@@ -387,7 +641,44 @@
                 .then(data => {
                     isQuerying = false;
                     btnConsultarContainer.style.display = 'block';
+
+                    // 1. Check if CA is already registered in the system (Duplicate Prevention)
+                    if (data.already_registered && data.existing_product) {
+                        cardDadosOficiais.style.display = 'none';
+                        cardDadosComplementares.style.display = 'none';
+                        if (submitBtn) submitBtn.disabled = true;
+
+                        feedbackDiv.className = 'mt-3 p-4 rounded-3 border border-warning text-light';
+                        feedbackDiv.style.backgroundColor = 'rgba(255, 193, 7, 0.08)';
+                        feedbackDiv.innerHTML = `
+                            <div class="d-flex align-items-start gap-3 mb-3">
+                                <i class="bi bi-exclamation-triangle-fill text-warning fs-3"></i>
+                                <div>
+                                    <h5 class="text-warning fw-bold mb-2">Este C.A. já está cadastrado no sistema.</h5>
+                                    <div class="text-light mb-1"><strong>EPI:</strong> ${data.existing_product.nome}</div>
+                                    <div class="text-light mb-2"><strong>Tamanhos atuais:</strong> ${data.existing_product.variantes_str}</div>
+                                    <p class="text-secondary mb-0 small">
+                                        Para incluir outro tamanho, edite o cadastro existente. Não crie um novo EPI para cada tamanho.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="d-flex flex-wrap gap-2 mt-3 pt-3 border-top border-secondary">
+                                <a href="${data.existing_product.edit_url}" class="btn btn-warning btn-premium">
+                                    <i class="bi bi-pencil-square me-1"></i> Abrir cadastro existente
+                                </a>
+                                <a href="/ppe/" class="btn btn-outline-secondary btn-premium">
+                                    <i class="bi bi-arrow-left me-1"></i> Voltar ao catálogo
+                                </a>
+                            </div>
+                        `;
+                        return;
+                    }
                     
+                    // Restore cards and submit button if previously hidden
+                    cardDadosComplementares.style.display = 'block';
+                    if (submitBtn) submitBtn.disabled = false;
+                    
+                    // 2. Process Official CA lookup data
                     if (data.success && data.found) {
                         const sit = (data.situacao || '').toUpperCase();
                         let badgeClass = 'bg-secondary';
@@ -487,6 +778,9 @@
                     isQuerying = false;
                     btnConsultarContainer.style.display = 'block';
                     cardDadosOficiais.style.display = 'none';
+                    cardDadosComplementares.style.display = 'block';
+                    if (submitBtn) submitBtn.disabled = false;
+                    
                     feedbackDiv.className = 'mt-3 p-3 rounded-3 border border-danger text-light';
                     feedbackDiv.innerHTML = `
                         <div class="d-flex align-items-center justify-content-between mb-2">

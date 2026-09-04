@@ -135,14 +135,14 @@
                         <table class="table table-dark table-hover mb-0 align-middle" id="items-table">
                             <thead>
                                 <tr>
-                                    <th style="min-width: 280px;">Produto</th>
-                                    <th style="width: 100px;">Qtd</th>
-                                    <th style="width: 90px;">Unidade</th>
-                                    <th style="width: 100px;">Tamanho</th>
-                                    <th style="width: 130px;">C.A.</th>
+                                    <th style="min-width: 280px;">EPI / Produto</th>
+                                    <th style="width: 90px;">Qtd</th>
+                                    <th style="width: 80px;">Unidade</th>
+                                    <th style="width: 170px;">Tamanho (Variante)</th>
+                                    <th style="width: 110px;">C.A.</th>
                                     <th style="width: 110px;">Unitário (R$)</th>
                                     <th style="width: 110px;">Subtotal (R$)</th>
-                                    <th style="width: 60px;" class="text-center">Ações</th>
+                                    <th style="width: 50px;" class="text-center">Ações</th>
                                 </tr>
                             </thead>
                             <tbody id="items-tbody">
@@ -378,53 +378,107 @@
     function onProductSelectChange(index) {
         const select = document.getElementById(`prod_select_${index}`);
         const prodId = select.value;
-        const prod = availableProducts.find(p => p.id == prodId);
-        
-        if (prod) {
-            document.getElementById(`prod_unidade_${index}`).value = prod.unidade_medida;
-            const caInput = document.getElementById(`prod_ca_${index}`);
-            caInput.value = prod.ca_numero || '';
-            
-            if (prod.tipo_produto === 'EPI') {
-                caInput.disabled = false;
-                caInput.placeholder = "C.A.";
-            } else {
-                caInput.disabled = true;
-                caInput.value = '';
-                caInput.placeholder = "Não Aplicável";
+        const variantSelect = document.getElementById(`prod_variant_${index}`);
+        const warningDiv = document.getElementById(`variant_warning_${index}`);
+        const unidadeInput = document.getElementById(`prod_unidade_${index}`);
+        const caInput = document.getElementById(`prod_ca_${index}`);
+
+        if (!prodId) {
+            variantSelect.innerHTML = '<option value="" disabled selected>Selecione o EPI primeiro...</option>';
+            variantSelect.disabled = true;
+            unidadeInput.value = 'UND';
+            caInput.value = '';
+            if (warningDiv) {
+                warningDiv.classList.add('d-none');
+                warningDiv.textContent = '';
             }
+            updateRowSubtotal(index);
+            return;
         }
-        updateRowSubtotal(index);
+
+        variantSelect.innerHTML = '<option value="" disabled selected>Carregando tamanhos...</option>';
+        variantSelect.disabled = true;
+        if (warningDiv) {
+            warningDiv.classList.add('d-none');
+            warningDiv.textContent = '';
+        }
+
+        fetch(`/ppe/api/variants/?product_id=${encodeURIComponent(prodId)}`, { credentials: 'same-origin' })
+            .then(res => {
+                if (!res.ok) throw new Error('Erro ao consultar variantes.');
+                return res.json();
+            })
+            .then(data => {
+                unidadeInput.value = data.unidade_medida || 'UND';
+                caInput.value = data.ca_numero || '';
+
+                const variants = data.variants || [];
+                variantSelect.innerHTML = '';
+
+                if (variants.length === 0) {
+                    variantSelect.innerHTML = '<option value="" disabled selected>Sem variantes cadastradas</option>';
+                    variantSelect.disabled = true;
+                    if (warningDiv) {
+                        warningDiv.textContent = 'O tamanho recebido ainda não está cadastrado para este EPI. Solicite ao SESMT a inclusão da variante antes de concluir a entrada.';
+                        warningDiv.classList.remove('d-none');
+                    }
+                } else {
+                    if (variants.length === 1) {
+                        // Seleção automática quando existe apenas 1 variante (AC04)
+                        const v = variants[0];
+                        const opt = new Option(v.text || v.tamanho, v.id, true, true);
+                        variantSelect.add(opt);
+                        variantSelect.disabled = false;
+                    } else {
+                        variantSelect.add(new Option('Selecione o tamanho...', '', true, true));
+                        variantSelect.options[0].disabled = true;
+                        variants.forEach(v => {
+                            variantSelect.add(new Option(v.text || v.tamanho, v.id));
+                        });
+                        variantSelect.disabled = false;
+                    }
+                }
+                updateRowSubtotal(index);
+            })
+            .catch(err => {
+                variantSelect.innerHTML = '<option value="" disabled selected>Erro ao carregar variantes</option>';
+                variantSelect.disabled = true;
+                if (warningDiv) {
+                    warningDiv.textContent = 'Erro ao carregar as variantes do EPI.';
+                    warningDiv.classList.remove('d-none');
+                }
+            });
     }
 
     function addItemRow() {
         const tbody = document.getElementById('items-tbody');
         const index = rowCounter++;
-        
-        let selectOptions = '<option value="" disabled selected>Selecione...</option>';
-        availableProducts.forEach(p => {
-            selectOptions += `<option value="${p.id}">${p.nome} ${p.ca_numero ? '(C.A. ' + p.ca_numero + ')' : ''}</option>`;
-        });
 
         const tr = document.createElement('tr');
         tr.id = `item_row_${index}`;
         tr.innerHTML = `
             <td>
-                <select id="prod_select_${index}" class="form-select form-control-premium" required onchange="onProductSelectChange(${index})">
-                    ${selectOptions}
+                <select id="prod_select_${index}" class="form-select form-control-premium searchable-select" 
+                        data-search-url="/ppe/api/search/" 
+                        data-placeholder="Buscar EPI por nome ou C.A...." 
+                        required onchange="onProductSelectChange(${index})">
+                    <option value="" disabled selected>Buscar EPI por nome ou C.A....</option>
                 </select>
             </td>
             <td>
                 <input type="number" id="prod_qty_${index}" class="form-control form-control-premium text-center" min="1" value="1" required oninput="updateRowSubtotal(${index})">
             </td>
             <td>
-                <input type="text" id="prod_unidade_${index}" class="form-control form-control-premium text-center" value="UND" required>
+                <input type="text" id="prod_unidade_${index}" class="form-control form-control-premium text-center bg-dark text-muted" value="UND" readonly tabindex="-1">
             </td>
             <td>
-                <input type="text" id="prod_tamanho_${index}" class="form-control form-control-premium text-center" value="U" required>
+                <select id="prod_variant_${index}" class="form-select form-control-premium text-center" required disabled>
+                    <option value="" disabled selected>Selecione o EPI primeiro...</option>
+                </select>
+                <div id="variant_warning_${index}" class="text-warning small mt-1 d-none" style="font-size: 0.75rem;"></div>
             </td>
             <td>
-                <input type="text" id="prod_ca_${index}" class="form-control form-control-premium text-center" placeholder="C.A." value="">
+                <input type="text" id="prod_ca_${index}" class="form-control form-control-premium text-center bg-dark text-muted" placeholder="C.A." value="" readonly tabindex="-1">
             </td>
             <td>
                 <input type="number" step="0.01" id="prod_cost_${index}" class="form-control form-control-premium text-end" placeholder="0,00" value="0.00" required oninput="updateRowSubtotal(${index})">
@@ -433,12 +487,18 @@
                 R$ 0,00
             </td>
             <td class="text-center">
-                <button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="removeItemRow(${index})">
+                <button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="removeItemRow(${index})" title="Remover item">
                     <i class="bi bi-trash3-fill"></i>
                 </button>
             </td>
         `;
         tbody.appendChild(tr);
+
+        // Inicializa o seletor pesquisável na nova linha adicionada
+        if (window.initSearchableSelects) {
+            window.initSearchableSelects(tr);
+        }
+
         updateRowSubtotal(index);
     }
 
@@ -597,20 +657,19 @@
             const costInput = document.getElementById(`prod_cost_${index}`);
             const caInput = document.getElementById(`prod_ca_${index}`);
             
-            const product_id = prodSelect.value;
+            const product_id = prodSelect ? prodSelect.value : '';
+            const variantSelect = document.getElementById(`prod_variant_${index}`);
+            const variant_id = variantSelect ? variantSelect.value : '';
             const quantidade = parseInt(qtyInput.value) || 0;
             const custo_unitario = parseFloat(costInput.value) || 0;
-            const tamanho = document.getElementById(`prod_tamanho_${index}`).value.trim();
-            const ca_numero = caInput.value.trim();
 
-            if (!product_id || quantidade <= 0 || custo_unitario < 0) {
+            if (!product_id || !variant_id || quantidade <= 0 || custo_unitario < 0) {
                 hasError = true;
             }
 
             items.push({
                 product_id: parseInt(product_id),
-                tamanho: tamanho,
-                ca_numero: ca_numero,
+                variant_id: parseInt(variant_id),
                 identificador: "", // Autogerado no backend
                 data_validade: null, // Autogerado no backend
                 quantidade: quantidade,
@@ -625,7 +684,7 @@
         }
 
         if (hasError) {
-            alert("Por favor, preencha todos os campos obrigatórios dos itens (Produto, Qtd, Custo).");
+            alert("Por favor, preencha todos os campos obrigatórios dos itens (selecione o Produto, o Tamanho/Variante cadastrado e informe Qtd e Custo).");
             e.preventDefault();
             return;
         }

@@ -1,15 +1,27 @@
 from django import forms
 from .models import Product, PPEMatrix, ProductVariant, PPEDelivery, SectorPPEMatrix
 from organizations.models import Function, Sector
+from .constants import (
+    UNIDADE_MEDIDA_CHOICES, UNIDADE_MEDIDA_PADRAO, normalize_unit_of_measure,
+    CANONICAL_SIZES_BY_GROUP, ALL_CANONICAL_SIZES, TAMANHO_UNICO
+)
+from .services import canonical_size_key, normalize_size_string
 
 class ProductForm(forms.ModelForm):
+    unidade_medida = forms.ChoiceField(
+        choices=Product.UNIDADE_MEDIDA_CHOICES,
+        label="Como este EPI será contado no estoque?",
+        initial=UNIDADE_MEDIDA_PADRAO,
+        widget=forms.Select(attrs={'class': 'form-select form-control-premium'})
+    )
+    tem_variacao_tamanho = forms.ChoiceField(
+        choices=[('nao', 'Não — Tamanho único'), ('sim', 'Sim — Possui tamanhos')],
+        required=False,
+        initial='nao'
+    )
     tamanhos_str = forms.CharField(
         required=False,
-        label="Tamanhos / Variantes Disponíveis (separados por vírgula)",
-        widget=forms.TextInput(attrs={
-            'class': 'form-control form-control-premium',
-            'placeholder': 'Ex: P, M, G, GG ou 38, 39, 40 ou Único (deixe em branco para Único \'U\')'
-        })
+        widget=forms.HiddenInput()
     )
 
     class Meta:
@@ -19,6 +31,27 @@ class ProductForm(forms.ModelForm):
             'descricao', 'unidade_medida', 'fabricante', 
             'exige_ca', 'controlado_individualmente', 'ativo'
         ]
+        widgets = {
+            'nome': forms.TextInput(attrs={'class': 'form-control form-control-premium', 'placeholder': 'Ex: Respirador PFF2'}),
+            'categoria': forms.Select(attrs={'class': 'form-select form-control-premium'}),
+            'fabricante': forms.TextInput(attrs={'class': 'form-control form-control-premium', 'placeholder': 'Ex: 3M'}),
+            'descricao': forms.Textarea(attrs={'class': 'form-control form-control-premium', 'rows': 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            active_vars = self.instance.variants.filter(ativo=True)
+            non_unique = [v.tamanho for v in active_vars if v.tamanho != 'U']
+            if non_unique:
+                self.initial['tem_variacao_tamanho'] = 'sim'
+                self.initial['tamanhos_str'] = ", ".join(non_unique)
+            else:
+                self.initial['tem_variacao_tamanho'] = 'nao'
+                self.initial['tamanhos_str'] = 'U'
+        else:
+            self.initial.setdefault('tem_variacao_tamanho', 'nao')
+            self.initial.setdefault('unidade_medida', UNIDADE_MEDIDA_PADRAO)
 
     def clean(self):
         import logging
@@ -28,23 +61,92 @@ class ProductForm(forms.ModelForm):
         tipo_produto = cleaned_data.get('tipo_produto')
         ca_numero = cleaned_data.get('ca_numero')
 
+        # 1. Validação da Unidade de Medida
+        raw_um = cleaned_data.get('unidade_medida') or self.data.get('unidade_medida')
+        um_norm = normalize_unit_of_measure(raw_um)
+        valid_ums = [c[0] for c in Product.UNIDADE_MEDIDA_CHOICES]
+        if um_norm not in valid_ums:
+            self.add_error('unidade_medida', "Unidade de medida inválida.")
+        else:
+            cleaned_data['unidade_medida'] = um_norm
+
+        # Extrai tamanhos enviados via checkboxes ('tamanhos') ou 'tamanhos_str'
+        if hasattr(self.data, 'getlist'):
+            raw_tamanhos = self.data.getlist('tamanhos')
+        else:
+            val = self.data.get('tamanhos')
+            raw_tamanhos = val if isinstance(val, list) else ([val] if val else [])
+            
+        if not raw_tamanhos:
+            ts_val = self.data.get('tamanhos_str') or cleaned_data.get('tamanhos_str') or ''
+            if ts_val:
+                raw_tamanhos = [t.strip() for t in ts_val.split(',') if t.strip()]
+
+        # 2. Validação da Variação de Tamanho
+        tem_var = self.data.get('tem_variacao_tamanho') or cleaned_data.get('tem_variacao_tamanho')
+        if not tem_var:
+            if raw_tamanhos and any(t.upper() not in ('U', 'UNICO', 'ÚNICO') for t in raw_tamanhos):
+                tem_var = 'sim'
+            else:
+                tem_var = 'nao'
+        cleaned_data['tem_variacao_tamanho'] = tem_var
+
+        if tem_var == 'nao':
+            # Tamanho único
+            outros_tamanhos = [t for t in raw_tamanhos if t.upper() not in ('U', 'UNICO', 'ÚNICO')]
+            if outros_tamanhos:
+                self.add_error('tem_variacao_tamanho', "A opção 'Único' não pode ser utilizada junto com outros tamanhos.")
+                self.add_error('tamanhos_str', "A opção 'Único' não pode ser utilizada junto com outros tamanhos.")
+            cleaned_data['tamanhos_list'] = ['U']
+            cleaned_data['tamanhos_str'] = 'U'
+        else:
+            # Possui tamanhos
+            tamanhos_sem_u = [t for t in raw_tamanhos if t.upper() not in ('U', 'UNICO', 'ÚNICO')]
+            tem_u = any(t.upper() in ('U', 'UNICO', 'ÚNICO') for t in raw_tamanhos)
+            if tem_u:
+                self.add_error('tem_variacao_tamanho', "A opção 'Único' não pode ser utilizada junto com outros tamanhos.")
+                self.add_error('tamanhos_str', "A opção 'Único' não pode ser utilizada junto com outros tamanhos.")
+            if not tamanhos_sem_u:
+                self.add_error('tem_variacao_tamanho', "Selecione pelo menos um tamanho para este EPI.")
+                self.add_error('tamanhos_str', "Selecione pelo menos um tamanho para este EPI.")
+
+            # Validação contra o catálogo canônico
+            invalid_sizes = []
+            for s in tamanhos_sem_u:
+                s_key = canonical_size_key(s)
+                if s_key not in ALL_CANONICAL_SIZES:
+                    invalid_sizes.append(s)
+            if invalid_sizes:
+                err_msg = f"O tamanho '{invalid_sizes[0]}' não pertence ao catálogo permitido."
+                self.add_error('tem_variacao_tamanho', err_msg)
+                self.add_error('tamanhos_str', err_msg)
+
+            normalized_list = normalize_size_string(tamanhos_sem_u)
+            cleaned_data['tamanhos_list'] = normalized_list
+            cleaned_data['tamanhos_str'] = ", ".join(normalized_list)
+
+        # 3. Validação do C.A.
         if tipo_produto == 'EPI':
             if ca_numero:
                 # Normaliza o número do CA (apenas dígitos)
                 num_norm = "".join([c for c in str(ca_numero) if c.isdigit()])
-                cleaned_data['ca_numero'] = num_norm
+                cleaned_data['ca_numero'] = num_norm if num_norm else None
                 
-                # Validação de duplicidade de CA no nível de aplicação (SPEC 1 - Objetivo 5)
+                # Validação de duplicidade de CA no nível de aplicação
                 if num_norm:
-                    dup_qs = Product.objects.filter(tipo_produto='EPI', ca_numero=num_norm)
+                    dup_qs = Product.objects.filter(ca_numero=num_norm)
                     if self.instance and self.instance.pk:
                         dup_qs = dup_qs.exclude(pk=self.instance.pk)
                     
                     existing_epi = dup_qs.first()
                     if existing_epi:
+                        tamanhos_existentes = ", ".join([v.tamanho for v in existing_epi.variants.filter(ativo=True)]) or "Nenhum"
                         self.add_error(
                             'ca_numero',
-                            f"Já existe um EPI cadastrado com o CA {num_norm}. Abra o cadastro existente para adicionar ou editar os tamanhos disponíveis."
+                            f"Este C.A. já está cadastrado no sistema. Já existe um EPI cadastrado com o CA {num_norm}.\n"
+                            f"EPI: {existing_epi.nome}\n"
+                            f"Tamanhos atuais: {tamanhos_existentes}\n"
+                            f"Para incluir outro tamanho, edite o cadastro existente. Não crie um novo EPI para cada tamanho."
                         )
                 
                 # Tenta obter ou consultar do ConsultaCA no backend para persistir snapshot
@@ -54,15 +156,12 @@ class ProductForm(forms.ModelForm):
                     
                     if result.get('success'):
                         if result.get('found'):
-                            # Auto-preenche fabricante se estiver em branco, usando o nome oficial/fantasia
+                            # Auto-preenche fabricante se estiver em branco
                             if not cleaned_data.get('fabricante'):
                                 cleaned_data['fabricante'] = result.get('nome_fantasia') or result.get('fabricante')
                         else:
-                            # Se não foi encontrado, mas o fluxo manual é permitido, o salvamento prossegue.
-                            # O registro correspondente em CertificadoAprovacao já terá status_verificacao='NAO_ENCONTRADO'.
                             logger.info(f"CA {num_norm} não encontrado. Cadastro mantido como não confirmado pela consulta.")
                     elif result.get('indisponivel'):
-                        # Se indisponível, permite salvar normalmente para não bloquear a operação
                         logger.warning(f"ConsultaCA indisponível durante salvamento de EPI com CA {num_norm}. Salvamento permitido.")
                 except Exception as e:
                     logger.warning(f"Erro ao consultar/atualizar cache do CA no salvamento do formulário: {str(e)}")
@@ -130,7 +229,11 @@ class PPEMatrixItemForm(forms.ModelForm):
         model = PPEMatrix
         fields = ['product', 'quantidade_padrao', 'vida_util_dias', 'obrigatorio', 'principal']
         widgets = {
-            'product': forms.Select(attrs={'class': 'form-select form-control-premium ppe-product-select'}),
+            'product': forms.Select(attrs={
+                'class': 'form-select form-control-premium ppe-product-select searchable-select',
+                'data-search-url': '/ppe/api/search/',
+                'data-placeholder': 'Selecione ou pesquise o EPI...'
+            }),
             'quantidade_padrao': forms.NumberInput(attrs={'class': 'form-control form-control-premium', 'min': '1', 'placeholder': 'Qtd'}),
             'vida_util_dias': forms.NumberInput(attrs={'class': 'form-control form-control-premium', 'min': '1', 'placeholder': 'Dias'}),
             'obrigatorio': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
@@ -318,8 +421,15 @@ class PPEDeliveryForm(forms.ModelForm):
         model = PPEDelivery
         fields = ['employee', 'lot', 'quantidade', 'data_entrega', 'natureza_entrega', 'motivo_substituicao', 'product_variant']
         widgets = {
-            'employee': forms.Select(attrs={'class': 'form-select form-control-premium'}),
-            'lot': forms.Select(attrs={'class': 'form-select form-control-premium'}),
+            'employee': forms.Select(attrs={
+                'class': 'form-select form-control-premium searchable-select',
+                'data-search-url': '/employees/api/search/',
+                'data-placeholder': 'Selecione o trabalhador...'
+            }),
+            'lot': forms.Select(attrs={
+                'class': 'form-select form-control-premium searchable-select',
+                'data-placeholder': 'Selecione o EPI disponível no estoque SST...'
+            }),
             'quantidade': forms.NumberInput(attrs={'class': 'form-control form-control-premium', 'min': '1'}),
             'data_entrega': forms.DateInput(attrs={'class': 'form-control form-control-premium', 'type': 'date'}),
             'natureza_entrega': forms.Select(attrs={'class': 'form-select form-control-premium'}),

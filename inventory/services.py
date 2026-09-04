@@ -223,7 +223,10 @@ def create_and_confirm_fiscal_note(fiscal_note, items_data, user):
         data_fabricacao = item.get('data_fabricacao') or None
         data_validade = item.get('data_validade')
         quantidade = int(item.get('quantidade', 0))
-        custo_unitario = decimal.Decimal(str(item.get('custo_unitario', 0.0)))
+        raw_custo = item.get('custo_unitario')
+        if raw_custo is None:
+            raw_custo = item.get('valor_unitario', 0.0)
+        custo_unitario = decimal.Decimal(str(raw_custo))
 
         if quantidade <= 0:
             raise ValidationError("A quantidade dos itens deve ser maior que zero.")
@@ -244,28 +247,51 @@ def create_and_confirm_fiscal_note(fiscal_note, items_data, user):
         except Product.DoesNotExist:
             raise ValidationError(f"Produto com ID {product_id} não existe.")
 
-        # Encontra ou cria a variante correspondente ao tamanho
-        variant, _ = ProductVariant.objects.get_or_create(
-            product=product,
-            tamanho=tamanho,
-            defaults={'ativo': True, 'estoque_minimo': 0}
-        )
+        # Busca e validação estrita da variante existente
+        variant_id = item.get('variant_id')
+        variant = None
+        if variant_id:
+            try:
+                variant = ProductVariant.objects.select_related('product').get(id=int(variant_id), ativo=True)
+            except (ProductVariant.DoesNotExist, ValueError):
+                raise ValidationError("A variante informada não foi encontrada ou está inativa.")
+            if variant.product_id != product.id:
+                raise ValidationError("O tamanho selecionado não pertence ao EPI informado.")
+        else:
+            from ppe.services import canonical_size_key
+            tamanho_raw = item.get('tamanho', '').strip()
+            if tamanho_raw:
+                t_key = canonical_size_key(tamanho_raw)
+                variant = ProductVariant.objects.filter(product=product, tamanho_normalizado=t_key, ativo=True).first()
+            if not variant:
+                active_vars = list(ProductVariant.objects.filter(product=product, ativo=True))
+                if len(active_vars) == 1:
+                    variant = active_vars[0]
+                elif not active_vars:
+                    raise ValidationError(f"O tamanho recebido ainda não está cadastrado para este EPI. Solicite ao SESMT a inclusão da variante antes de concluir a entrada.")
+                else:
+                    raise ValidationError(f"Por favor, selecione um tamanho/variante válido para o produto '{product.nome}'.")
 
-        # Encontra ou cria o CertificadoAprovacao se for EPI e possuir C.A.
+        if variant.product_id != product.id:
+            raise ValidationError("O tamanho selecionado não pertence ao EPI informado.")
+
+        # O C.A. e Unidade são derivados exclusivamente do cadastro oficial do EPI
         ca_obj = None
-        if product.tipo_produto == 'EPI' and ca_numero:
-            num_norm = "".join([c for c in ca_numero if c.isdigit()])
+        if product.tipo_produto == 'EPI' and product.ca_numero:
+            num_norm = "".join([c for c in str(product.ca_numero) if c.isdigit()])
             if num_norm:
-                ca_obj, _ = CertificadoAprovacao.objects.get_or_create(
-                    numero=num_norm,
-                    defaults={
-                        'numero_exibicao': ca_numero,
-                        'fabricante': product.fabricante or 'Informado via NF',
-                        'data_validade': timezone.now().date() + timezone.timedelta(days=365*2), # 2 anos padrão
-                        'status_verificacao': 'INFORMADO_MANUALMENTE',
-                        'justificativa_manual': 'Criado via recebimento de NF.'
-                    }
-                )
+                ca_obj = CertificadoAprovacao.objects.filter(numero=num_norm).first()
+                if not ca_obj:
+                    ca_obj, _ = CertificadoAprovacao.objects.get_or_create(
+                        numero=num_norm,
+                        defaults={
+                            'numero_exibicao': f"CA {num_norm}",
+                            'fabricante': product.fabricante or 'Informado no Cadastro de EPI',
+                            'data_validade': timezone.now().date() + timezone.timedelta(days=365*2),
+                            'status_verificacao': 'INFORMADO_MANUALMENTE',
+                            'justificativa_manual': 'Vinculado ao cadastro de EPI.'
+                        }
+                    )
 
         # Cria o lote
         lot = Lot.objects.create(

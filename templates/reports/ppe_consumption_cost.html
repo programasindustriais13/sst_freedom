@@ -28,7 +28,7 @@
         </div>
         <div class="col-12 col-md-3">
             <label for="id_company" class="form-label text-secondary small fw-semibold">Empresa</label>
-            <select name="company" id="id_company" class="form-select form-control-premium">
+            <select name="company" id="id_company" class="form-select form-control-premium searchable-select" data-placeholder="Todas as Empresas">
                 <option value="">Todas as Empresas</option>
                 {% for comp in companies %}
                 <option value="{{ comp.id }}" {% if filter_company == comp.id|stringformat:"s" %}selected{% endif %}>{{ comp.nome_fantasia }}</option>
@@ -37,16 +37,16 @@
         </div>
         <div class="col-12 col-md-3">
             <label for="id_unit" class="form-label text-secondary small fw-semibold">Unidade</label>
-            <select name="unit" id="id_unit" class="form-select form-control-premium">
+            <select name="unit" id="id_unit" class="form-select form-control-premium searchable-select" data-placeholder="Todas as Unidades">
                 <option value="">Todas as Unidades</option>
                 {% for u in units %}
-                <option value="{{ u.id }}" {% if filter_unit == u.id|stringformat:"s" %}selected{% endif %}>{{ u.codigo }} - {{ u.nome }}</option>
+                <option value="{{ u.id }}" data-company="{{ u.company_id }}" {% if filter_unit == u.id|stringformat:"s" %}selected{% endif %}>{{ u.codigo }} - {{ u.nome }}</option>
                 {% endfor %}
             </select>
         </div>
         <div class="col-12 col-md-3">
             <label for="id_setor" class="form-label text-secondary small fw-semibold">Setor Histórico</label>
-            <select name="setor" id="id_setor" class="form-select form-control-premium">
+            <select name="setor" id="id_setor" class="form-select form-control-premium searchable-select" data-placeholder="Todos os Setores">
                 <option value="">Todos os Setores</option>
                 {% for s in sectors %}
                 <option value="{{ s.id }}" {% if filter_setor == s.id|stringformat:"s" %}selected{% endif %}>{{ s.nome }} ({{ s.unit.codigo }})</option>
@@ -55,15 +55,31 @@
         </div>
         <div class="col-12 col-md-3">
             <label for="id_employee" class="form-label text-secondary small fw-semibold">Colaborador</label>
-            <input type="text" name="employee" id="id_employee" class="form-control form-control-premium" placeholder="Nome, Matrícula ou CPF..." value="{{ filter_employee }}">
+            <select name="employee" id="id_employee" class="form-select form-control-premium searchable-select" data-search-url="/employees/api/search/" data-placeholder="Todos os Colaboradores">
+                <option value="">Todos os Colaboradores</option>
+                {% if selected_employee %}
+                <option value="{{ selected_employee.id }}" selected>{{ selected_employee.nome_completo }}{% if selected_employee.setor %} — {{ selected_employee.setor.nome }}{% endif %}{% if selected_employee.matricula %} (Mat: {{ selected_employee.matricula }}){% endif %}</option>
+                {% elif filter_employee and not filter_employee.isdigit %}
+                <option value="{{ filter_employee }}" selected>{{ filter_employee }}</option>
+                {% endif %}
+            </select>
         </div>
         <div class="col-12 col-md-3">
             <label for="id_product" class="form-label text-secondary small fw-semibold">EPI / Equipamento</label>
-            <select name="product" id="id_product" class="form-select form-control-premium">
+            <select name="product" id="id_product" class="form-select form-control-premium searchable-select" data-search-url="/ppe/api/search/" data-placeholder="Todos os Equipamentos">
                 <option value="">Todos os Equipamentos</option>
+                {% if selected_product %}
+                <option value="{{ selected_product.id }}" selected>{{ selected_product.nome }}{% if selected_product.ca_numero %} — C.A. {{ selected_product.ca_numero }}{% endif %}</option>
                 {% for p in products %}
-                <option value="{{ p.id }}" {% if filter_product == p.id|stringformat:"s" %}selected{% endif %}>{{ p.nome }}</option>
+                {% if p.id != selected_product.id %}
+                <option value="{{ p.id }}">{{ p.nome }}{% if p.ca_numero %} — C.A. {{ p.ca_numero }}{% endif %}</option>
+                {% endif %}
                 {% endfor %}
+                {% else %}
+                {% for p in products %}
+                <option value="{{ p.id }}" {% if filter_product == p.id|stringformat:"s" %}selected{% endif %}>{{ p.nome }}{% if p.ca_numero %} — C.A. {{ p.ca_numero }}{% endif %}</option>
+                {% endfor %}
+                {% endif %}
             </select>
         </div>
         <div class="col-12 col-md-3 d-flex align-items-end gap-2">
@@ -338,4 +354,33 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const companySelect = document.getElementById('id_company');
+    const unitSelect = document.getElementById('id_unit');
+
+    if (companySelect && unitSelect) {
+        companySelect.addEventListener('change', function() {
+            const selectedCompanyId = this.value;
+            if (!selectedCompanyId) return;
+
+            // Se a unidade selecionada não pertencer à empresa escolhida, limpa a unidade
+            const selectedUnitOpt = unitSelect.selectedOptions[0];
+            if (selectedUnitOpt && selectedUnitOpt.value) {
+                const comp = selectedUnitOpt.getAttribute('data-company');
+                if (comp && comp !== selectedCompanyId) {
+                    if (unitSelect._searchableSelectInstance) {
+                        unitSelect._searchableSelectInstance.clear();
+                    } else {
+                        unitSelect.value = '';
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

@@ -120,10 +120,45 @@
                     </table>
                 </div>
 
+                <!-- Template para novas linhas limpas do formset -->
+                <template id="empty-form-template">
+                    <tr class="formset-row">
+                        {{ formset.empty_form.id }}
+                        <td>
+                            {{ formset.empty_form.product }}
+                        </td>
+                        <td>
+                            {{ formset.empty_form.quantidade_padrao }}
+                        </td>
+                        <td>
+                            {{ formset.empty_form.vida_util_dias }}
+                        </td>
+                        <td class="text-center">
+                            <div class="form-check d-inline-block">
+                                {{ formset.empty_form.obrigatorio }}
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            <div class="form-check d-inline-block">
+                                {{ formset.empty_form.principal }}
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            <div class="d-none">{{ formset.empty_form.DELETE }}</div>
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn" title="Remover item">
+                                <i class="bi bi-trash-fill"></i>
+                            </button>
+                        </td>
+                    </tr>
+                </template>
+
                 <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center pt-3 border-top" style="border-color: var(--border-default) !important;">
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-premium btn-premium-primary px-4">
-                            <i class="bi bi-check-lg me-2"></i> Salvar Matriz do Setor
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="submit" name="action" value="save_and_activate" class="btn btn-premium btn-premium-primary px-4">
+                            <i class="bi bi-check-circle-fill me-2"></i> Salvar e Ativar
+                        </button>
+                        <button type="submit" name="action" value="save_draft" class="btn btn-outline-warning btn-premium px-4">
+                            <i class="bi bi-file-earmark me-2"></i> Salvar como elaboração
                         </button>
                         <a href="{% url 'sector_matrix_list' %}" class="btn btn-outline-secondary btn-premium px-4">
                             Cancelar
@@ -142,11 +177,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const addBtn = document.getElementById('add-row-btn');
     const container = document.getElementById('formset-container');
     const totalFormsInput = document.getElementById('id_ppe_matrix_entries-TOTAL_FORMS');
+    const emptyTemplate = document.getElementById('empty-form-template');
 
     if (!container || !totalFormsInput) return;
 
     function attachRemoveEvents() {
-        document.querySelectorAll('.remove-row-btn').forEach(btn => {
+        container.querySelectorAll('.remove-row-btn').forEach(btn => {
             btn.onclick = function() {
                 const row = this.closest('tr');
                 const deleteInput = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
@@ -154,8 +190,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     deleteInput.checked = true;
                     row.style.display = 'none';
                 } else {
-                    const allRows = container.querySelectorAll('.formset-row:not([style*="display: none"])');
-                    if (allRows.length > 1) {
+                    const visibleRows = container.querySelectorAll('.formset-row:not([style*="display: none"])');
+                    if (visibleRows.length > 1) {
+                        const sel = row.querySelector('.searchable-select');
+                        if (sel && sel._searchableSelectInstance) {
+                            sel._searchableSelectInstance.destroy();
+                        }
                         row.remove();
                     } else {
                         alert('A matriz deve conter ao menos um item.');
@@ -167,46 +207,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     attachRemoveEvents();
 
-    if (addBtn) {
+    if (addBtn && emptyTemplate) {
         addBtn.addEventListener('click', function() {
-            let totalForms = parseInt(totalFormsInput.value);
-            const rows = container.querySelectorAll('.formset-row');
-            if (rows.length === 0) return;
-
-            const newRow = rows[0].cloneNode(true);
-            newRow.style.display = '';
-
-            const regex = new RegExp('-0-', 'g');
-            newRow.innerHTML = newRow.innerHTML.replace(regex, `-${totalForms}-`);
-
-            // Limpa valores e reseta defaults
-            const idInput = newRow.querySelector('input[name$="-id"]');
-            if (idInput) idInput.value = '';
-
-            const productSelect = newRow.querySelector('select[name$="-product"]');
-            if (productSelect) productSelect.selectedIndex = 0;
-
-            const qtdInput = newRow.querySelector('input[name$="-quantidade_padrao"]');
-            if (qtdInput) qtdInput.value = '1';
-
-            const vuInput = newRow.querySelector('input[name$="-vida_util_dias"]');
-            if (vuInput) vuInput.value = '365';
-
-            const obInput = newRow.querySelector('input[name$="-obrigatorio"]');
-            if (obInput) obInput.checked = true;
-
-            const prInput = newRow.querySelector('input[name$="-principal"]');
-            if (prInput) prInput.checked = true;
-
-            const delInput = newRow.querySelector('input[name$="-DELETE"]');
-            if (delInput) delInput.checked = false;
-
-            // Remove mensagens de erro clonadas
-            newRow.querySelectorAll('.invalid-feedback').forEach(el => el.remove());
+            let totalForms = parseInt(totalFormsInput.value, 10) || 0;
+            const rowHtml = emptyTemplate.innerHTML.replace(/__prefix__/g, totalForms);
+            const tempTable = document.createElement('tbody');
+            tempTable.innerHTML = rowHtml.trim();
+            const newRow = tempTable.firstElementChild;
 
             container.appendChild(newRow);
             totalFormsInput.value = totalForms + 1;
             attachRemoveEvents();
+
+            if (window.initSearchableSelects) {
+                window.initSearchableSelects(newRow);
+            }
         });
     }
 });

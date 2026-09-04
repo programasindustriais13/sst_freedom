@@ -1,0 +1,202 @@
+/* ==========================================================================
+   Componente Centralizado de Searchable Select - SST Freedom
+   Totalmente estilizado para o Tema Escuro / Glassmorphism
+   ========================================================================== */
+
+.searchable-select-wrapper {
+    position: relative;
+    width: 100%;
+    display: inline-block;
+    font-family: inherit;
+}
+
+/* Caixa principal de exibição e busca */
+.searchable-select-control {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 42px;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.95rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--text-primary, #f8f9fa);
+    background-color: var(--bg-surface, #1e222d);
+    background-clip: padding-box;
+    border: 1px solid var(--border-default, rgba(255, 255, 255, 0.15));
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    user-select: none;
+}
+
+.searchable-select-control:focus-within,
+.searchable-select-control.active {
+    border-color: var(--brand-primary, #0d6efd);
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    outline: 0;
+}
+
+.searchable-select-control.disabled {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.08);
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
+/* Valor selecionado ou placeholder */
+.searchable-select-value {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary, #f8f9fa);
+}
+
+.searchable-select-placeholder {
+    color: var(--text-muted, #6c757d);
+}
+
+/* Ícones de ação (limpar e abrir/fechar) */
+.searchable-select-indicators {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-left: 0.5rem;
+    flex-shrink: 0;
+}
+
+.searchable-select-clear {
+    color: var(--text-muted, #adb5bd);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0.15rem;
+    border-radius: 50%;
+    transition: color 0.15s, background-color 0.15s;
+}
+
+.searchable-select-clear:hover {
+    color: #dc3545;
+    background-color: rgba(220, 53, 69, 0.15);
+}
+
+.searchable-select-arrow {
+    color: var(--text-muted, #adb5bd);
+    font-size: 0.8rem;
+    transition: transform 0.2s ease-in-out;
+}
+
+.searchable-select-control.active .searchable-select-arrow {
+    transform: rotate(180deg);
+}
+
+/* Dropdown flutuante (Portal / Fixed para não ser cortado por overflow de cards ou tabelas) */
+.searchable-select-dropdown {
+    position: fixed;
+    z-index: 99999;
+    display: none;
+    max-height: 320px;
+    background-color: var(--bg-surface-elevated, #242936);
+    border: 1px solid var(--border-default, rgba(255, 255, 255, 0.22));
+    border-radius: 0.5rem;
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.75);
+    overflow: hidden;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+.searchable-select-dropdown.show {
+    display: flex;
+}
+
+/* Input interno de busca */
+.searchable-select-search {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border-default, rgba(255, 255, 255, 0.1));
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+.searchable-select-input {
+    width: 100%;
+    padding: 0.4rem 0.65rem;
+    font-size: 0.9rem;
+    color: var(--text-primary, #f8f9fa);
+    background-color: var(--bg-surface, #1e222d);
+    border: 1px solid var(--border-default, rgba(255, 255, 255, 0.15));
+    border-radius: 0.35rem;
+    outline: none;
+}
+
+.searchable-select-input:focus {
+    border-color: var(--brand-primary, #0d6efd);
+}
+
+/* Lista de opções */
+.searchable-select-options {
+    list-style: none;
+    margin: 0;
+    padding: 0.25rem 0;
+    overflow-y: auto;
+    max-height: 240px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.searchable-select-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.searchable-select-options::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.searchable-select-option {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+    color: var(--text-primary, #e2e8f0);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.searchable-select-option:hover,
+.searchable-select-option.focused {
+    background-color: rgba(13, 110, 253, 0.25);
+    color: #ffffff;
+}
+
+.searchable-select-option.selected {
+    background-color: rgba(13, 110, 253, 0.4);
+    font-weight: 600;
+    color: #ffffff;
+}
+
+/* Mensagens de status (carregando, vazio, erro) */
+.searchable-select-status {
+    padding: 0.75rem;
+    font-size: 0.85rem;
+    text-align: center;
+    color: var(--text-muted, #adb5bd);
+}
+
+.searchable-select-load-more {
+    padding: 0.4rem;
+    text-align: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.searchable-select-load-more-btn {
+    background: transparent;
+    border: none;
+    color: var(--brand-primary, #0d6efd);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.2rem 0.5rem;
+}
+
+.searchable-select-load-more-btn:hover {
+    text-decoration: underline;
+}
